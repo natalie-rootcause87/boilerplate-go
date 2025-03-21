@@ -1,5 +1,4 @@
 import { LogEntry } from "./GameState";
-import Player from "./Player";
 
 export default class Spell {
   name: string;
@@ -28,7 +27,7 @@ export default class Spell {
     this.earnedByCombat = earnedByCombat;
   }
 
-  applyEffect(playerMana: number, monsterHp: number) {
+  applyEffect(playerMana: number) {
     if (playerMana < this.manaCost) {
       return console.log(`Not enough mana to cast ${this.name}.`);
     }

@@ -41,13 +41,13 @@ export default class EventManager {
     ];
 
     const randomEvent = events[Math.floor(Math.random() * events.length)];
-    let messageAddition = '';
+    // let messageAddition = '';
 
     if (randomEvent.affects === "XP") {
-      messageAddition = `You gain ${randomEvent.value} XP.`;
+      // messageAddition = `You gain ${randomEvent.value} XP.`;
       gameState.addLogEntry(randomEvent.message, [{ type: 'XP', value: randomEvent.value, target: 'player' }]);
     } else if (randomEvent.affects === "HP") {
-      messageAddition = `Your health changes by ${randomEvent.value}.`;
+      // messageAddition = `Your health changes by ${randomEvent.value}.`;
       gameState.addLogEntry(randomEvent.message, [{ type: 'HP', value: randomEvent.value, target: 'player' }]);
 
       // Check if the player's health is zero or below

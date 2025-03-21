@@ -3,7 +3,6 @@ import GameState, { PartialGameState, LogEntry } from '../utils/GameState';
 import EventManager from '../utils/EventManager';
 import Spell, { allSpells } from '../utils/Spell';
 import ProgressBar from './ProgressBar';
-import axios from 'axios';
 
 export default function Game() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -12,7 +11,6 @@ export default function Game() {
   const [gameStarted, setGameStarted] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [currentEntries, setCurrentEntries] = useState<LogEntry[]>([]);
-  const [renderTrigger, setRenderTrigger] = useState(0);
   const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null);
   const logRef = useRef<HTMLUListElement | null>(null);
   const [isTurnPaused, setIsTurnPaused] = useState(false);
@@ -95,7 +93,7 @@ export default function Game() {
     if (updatedGameLog) updatedGameState.gameLog = updatedGameLog;
 
     console.log('Continue button clicked');
-    setRenderTrigger(prev => prev + 1);
+    // setRenderTrigger(prev => prev + 1);
 
     const lastTurnEntries = updatedGameLog?.[updatedGameLog.length - 1];
     if (Array.isArray(lastTurnEntries) && lastTurnEntries.some(entry => entry.message.includes('A wild'))) {
