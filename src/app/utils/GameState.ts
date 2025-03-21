@@ -7,6 +7,10 @@ export interface Effect {
   type: string;
   value: number;
   target: string;
+  special?: {
+    type: 'freeze';
+    duration: number;
+  };
 }
 
 export interface LogEntry {
@@ -105,11 +109,12 @@ export default class GameState {
     let playerHp = this.player.health;
     let playerMana = this.player.mana;
     let monsterHp = monster.health;
-    let turnCount = 0; // Initialize a turn counter
-    const maxTurns = 100; // Define a maximum number of turns to prevent infinite loops
+    let turnCount = 0;
+    const maxTurns = 100;
+    monster.frozenTurns = 0; // Initialize frozen turns
 
     while (monsterHp >= 0 && playerHp > 0 && turnCount < maxTurns) {
-      turnCount++; // Increment the turn counter
+      turnCount++;
       console.log('combat turnCount', turnCount);
       const eligibleSpells = this.player.spells
         .map(spell => allSpells.find(s => s.name === spell.name))
@@ -119,8 +124,21 @@ export default class GameState {
         const randomSpell = eligibleSpells[Math.floor(Math.random() * eligibleSpells.length)];
 
         if (randomSpell) {
-          const logEntry = randomSpell.applyEffect(playerMana, monsterHp) as LogEntry;
+          const logEntry = randomSpell.applyEffect(playerMana) as LogEntry;
           playerMana -= randomSpell.manaCost;
+          
+          // Handle freeze effects
+          const spellEffect = logEntry.effect?.[0]?.special;
+          if (spellEffect?.type === 'freeze') {
+            if (randomSpell.name === 'Donut') {
+              monster.frozenTurns = 1; // Always 1 turn for Donut
+            } else if (randomSpell.name === 'Freeze') {
+              const spellLevel = this.player.spells.find(s => s.name === 'Freeze')?.level || 1;
+              monster.frozenTurns = spellLevel;
+              logEntry.message += ` ${monster.name} is frozen for ${spellLevel} turns!`;
+            }
+          }
+
           if (randomSpell.targetType === 'player') {
             playerHp += randomSpell.power;
           }
@@ -151,11 +169,19 @@ console.log("INFO", monsterHp, monster)
         return;
       }
 
-      // Monster's return strike
-      const monsterDamage = monster.attack * Math.floor(Math.random() * 5) + 1; // Random damage between 1 and 5
-      playerHp -= monsterDamage;
-      this.addLogEntry(`${monster.name} strikes back for ${monsterDamage} damage.`, [{ type: 'HP', value: -monsterDamage, target: 'player' }]);
-      console.log("playerHp", playerHp);
+      // Monster's return strike - only if not frozen
+      if (monster.frozenTurns > 0) {
+        monster.frozenTurns--;
+        const message = monster.frozenTurns > 0 
+          ? `${monster.name} is frozen and cannot attack! (${monster.frozenTurns} turns remaining)`
+          : `${monster.name} thawed out!`;
+        this.addLogEntry(message);
+      } else {
+        const monsterDamage = monster.attack * Math.floor(Math.random() * 5) + 1;
+        playerHp -= monsterDamage;
+        this.addLogEntry(`${monster.name} strikes back for ${monsterDamage} damage.`, [{ type: 'HP', value: -monsterDamage, target: 'player' }]);
+      }
+
       // Check if the player is dead
       if (playerHp <= 0) {
         this.isGameOver = true;

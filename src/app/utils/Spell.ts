@@ -1,5 +1,15 @@
 import { LogEntry } from "./GameState";
 
+export interface SpellEffect {
+  type: "HP" | "Mana" | "XP";
+  value: number;
+  target: 'player' | 'monster';
+  special?: {
+    type: 'freeze';
+    duration: number;
+  };
+}
+
 export default class Spell {
   name: string;
   description: string;
@@ -32,19 +42,41 @@ export default class Spell {
       return console.log(`Not enough mana to cast ${this.name}.`);
     }
 
-    const logEntry: LogEntry = {
-      message: `Player casts ${this.name} on ${this.targetType === 'player' ? 'self' : 'Monster'}.`,
-      effect: [{
-        type: this.affects,
-        value: this.power,
-        target: this.targetType
-      },
-      {
-        type: 'Mana',
-        value: -this.manaCost,
-        target: 'player'
-      }]
+    const effect: SpellEffect = {
+      type: this.affects,
+      value: this.power,
+      target: this.targetType
+    };
+
+    // Add special effects based on spell name
+    if (this.name === 'Freeze') {
+      effect.special = {
+        type: 'freeze',
+        duration: 1 // This will be multiplied by spell level in combat
+      };
+    } else if (this.name === 'Donut') {
+      effect.special = {
+        type: 'freeze',
+        duration: -1 // Using -1 to indicate this is a fixed 1-turn duration
+      };
     }
+
+    let message = `Player casts ${this.name} on ${this.targetType === 'player' ? 'self' : 'Monster'}.`;
+    if (this.name === 'Donut') {
+      message = `A magical donut appears! The Monster is distracted, busy eating it.`;
+    }
+
+    const logEntry: LogEntry = {
+      message: message,
+      effect: [
+        effect,
+        {
+          type: 'Mana',
+          value: -this.manaCost,
+          target: 'player'
+        }
+      ]
+    };
 
     return logEntry;
   }
@@ -71,7 +103,7 @@ export const allSpells = [
   ),
   new Spell(
     'Freeze',
-    'An icy blast that freezes the target for one turn.',
+    'An icy blast that freezes the target, preventing them from attacking for a number of turns equal to the spell level.',
     -5,
     'HP',
     'monster',

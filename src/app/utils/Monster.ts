@@ -6,6 +6,7 @@ export class Monster {
   xpReward: number;
   manaOnHit: number;
   activeAfterTurn: number;
+  frozenTurns: number;
 
   constructor(name: string, difficultyLevel: number, manaOnHit: number, activeAfterTurn: number) {
     this.name = name;
@@ -15,6 +16,7 @@ export class Monster {
     this.xpReward = Math.floor(difficultyLevel * 10);
     this.manaOnHit = manaOnHit;
     this.activeAfterTurn = activeAfterTurn;
+    this.frozenTurns = 0;
   }
 }
 
