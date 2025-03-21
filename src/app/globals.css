@@ -19,3 +19,95 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Add this to your CSS file */
+.highlight {
+  border: 2px solid yellow;
+  animation: highlightAnimation 1s ease-in-out;
+}
+
+.monster-encounter {
+  animation: shake 0.5s;
+}
+
+.spell-selection {
+  animation: glow 1s infinite alternate;
+}
+
+.nothing-happens {
+  animation: fadeIn 1s;
+}
+
+.hud-item {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 5px;
+  margin-bottom: 5px;
+}
+
+.animation-element {
+  /* Example animation */
+  width: 50px;
+  height: 50px;
+  background-color: red;
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes highlightAnimation {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0% { transform: translateX(0px); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-5px); }
+  100% { transform: translateX(0px); }
+}
+
+.shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes glow {
+  0% { box-shadow: 0px 0px 10px rgba(255, 255, 0, 0.5); }
+  100% { box-shadow: 0px 0px 20px rgba(255, 255, 0, 1); }
+}
+
+.glow {
+  animation: glow 0.5s ease-in-out alternate infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.floating-text {
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
