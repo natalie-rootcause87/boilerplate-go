@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import GameState from '../../utils/GameState';
 import EventManager from '../../utils/EventManager';
 
@@ -10,11 +10,5 @@ export async function POST() {
     return NextResponse.json({ gameState });
   } catch (error) {
     return NextResponse.json({ error: `Internal Server Error: ${error}` }, { status: 500 });
-  }
-}
-
-export function middleware(req: NextRequest) {
-  if (req.method !== 'POST') {
-    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 });
   }
 }
