@@ -23,6 +23,7 @@ export default function Game() {
     const hasSeenVersion = localStorage.getItem('gameVersion') === version;
     return !hasSeenVersion && process.env.NODE_ENV === 'development';
   });
+  const [isSpellChoiceModalOpen, setIsSpellChoiceModalOpen] = useState(false);
 
   useEffect(() => {
     const newGameState = new GameState();
@@ -58,6 +59,12 @@ export default function Game() {
       setIsSpellReplaceModalOpen(true);
     }
   }, [gameState?.player.spellToReplace]);
+
+  useEffect(() => {
+    if (gameState?.player.pendingSpell) {
+      setIsSpellChoiceModalOpen(true);
+    }
+  }, [gameState?.player.pendingSpell]);
 
   const getUpdatedGameLog = (prev: GameState | null) => {
     if (!prev || prev.isGameOver) {
@@ -244,6 +251,32 @@ export default function Game() {
     localStorage.setItem('gameVersion', version);
   };
 
+  const handleSpellChoice = (chosenSpell?: string) => {
+    if (!gameState) return;
+    
+    const result = gameState.player.handleSpellChoice(chosenSpell);
+    let message = "";
+    
+    switch (result) {
+      case "kept_current":
+        message = `You decided to keep your current spells and skip learning ${gameState.player.pendingSpell}.`;
+        break;
+      case "replaced":
+        message = `You replaced ${chosenSpell} with ${gameState.player.pendingSpell}.`;
+        break;
+      case "upgraded":
+        message = `You upgraded ${gameState.player.pendingSpell}.`;
+        break;
+    }
+    
+    if (message) {
+      gameState.addLogEntry(message);
+    }
+    
+    setIsSpellChoiceModalOpen(false);
+    setGameState(Object.assign(new GameState(), gameState)); // Preserve class methods
+  };
+
   if (!gameState) {
     return <div>Loading...</div>;
   }
@@ -259,7 +292,7 @@ export default function Game() {
       </header>
 
       {/* Main Container */}
-      <main className="flex-grow w-full max-w-5xl flex flex-col items-center p-2 sm:p-4 pb-20 sm:pb-4">
+      <main className="flex-grow w-full max-w-5xl flex flex-col items-center p-2 overflow-auto sm:overflow-none sm:p-4 pb-20 sm:pb-4">
         {/* Player & Game Info */}
         <section className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           {/* Player Stats Card */}
@@ -359,7 +392,7 @@ export default function Game() {
                 gameState.isGameOver ? 'mb-24' : ''
               }`}
             >
-              {gameState?.gameLog.length > 0 &&
+              {gameStarted && gameState?.gameLog.length &&
                 gameState.gameLog
                   .slice(Math.max(gameState.gameLog.length - 3, 0))
                   .map((turnEntries: LogEntry[], turnIndex) => {
@@ -418,6 +451,13 @@ export default function Game() {
                       </li>
                     );
                   })}
+                  {gameState?.gameLog.length < 1 && !gameStarted && (
+                    <li>
+                      <div className="font-bold text-sm sm:text-base">
+                        Welcome to Donut Go, a game!
+                      </div>
+                    </li>
+                  )}
             </ul>
 
             {/* Action Button Container */}
@@ -595,6 +635,38 @@ export default function Game() {
         </div>
       )}
 
+      {isSpellChoiceModalOpen && gameState?.player.pendingSpell && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h2 className="text-lg sm:text-xl font-bold mb-4">New Spell Found!</h2>
+            <p className="mb-4">
+              You discovered {gameState.player.pendingSpell}! At level {gameState.player.level}, 
+              you can only hold {gameState.player.level} spells. Would you like to replace one 
+              of your current spells?
+            </p>
+            <div className="space-y-3">
+              <p className="font-semibold">Your current spells:</p>
+              {gameState.player.spells.map((spell) => (
+                <button
+                  key={spell.name}
+                  onClick={() => handleSpellChoice(spell.name)}
+                  className="w-full text-left p-3 hover:bg-gray-100 rounded transition-colors flex justify-between items-center"
+                >
+                  <span>Replace {spell.name} with {gameState?.player.pendingSpell}</span>
+                  <span className="text-sm text-gray-600">Level {spell.level}</span>
+                </button>
+              ))}
+              <button
+                onClick={() => handleSpellChoice()}
+                className="w-full mt-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+              >
+                Keep Current Spells
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showVersionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
@@ -602,10 +674,10 @@ export default function Game() {
             <div className="space-y-2 mb-6">
               <p className="font-bold">Changes in this version:</p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Faster leveling progression</li>
-                <li>Increased health gain on level up (20 HP, up from 10)</li>
-                <li>Increased mana gain on level up (5 Mana, up from 2)</li>
-                <li>Health and mana now fully restore on level up</li>
+                <li>Added choice to keep or replace spells when at capacity</li>
+                <li>Clearer messaging about spell slot limits</li>
+                <li>Improved spell replacement interface</li>
+                <li>Fixed mobile layout issues</li>
               </ul>
             </div>
             <button

@@ -75,21 +75,23 @@ export default class EventManager {
     const randomSpell = learnableSpells[Math.floor(Math.random() * learnableSpells.length)];
     const selectedSpellName = spellOverride || randomSpell.name;
     
-    // If player has max spells and no spell is selected to replace, initiate replacement
-    if (gameState.player.spells.length >= gameState.player.level && !gameState.player.spellToReplace) {
-      gameState.addLogEntry(`You have reached the maximum number of spells. Choose a spell to replace with ${selectedSpellName}.`);
-      gameState.player.spellToReplace = selectedSpellName; // Store the new spell name
+    // If player has max spells, give them the choice to keep or replace
+    if (gameState.player.spells.length >= gameState.player.level) {
+      gameState.addLogEntry(
+        `You found the ${selectedSpellName} spell! At level ${gameState.player.level}, ` +
+        `you can only hold ${gameState.player.level} spells. ` +
+        `Would you like to replace one of your current spells?`
+      );
+      gameState.player.pendingSpell = selectedSpellName; // Store the new spell name
       return;
     }
 
     const result = gameState.player.upgradeSpell(selectedSpellName);
-
     const resultMessage = {
       "upgraded": `Practice has paid off. You have upgraded your spell: ${selectedSpellName}.`,
       "learned": `You have learned a new spell: ${selectedSpellName}.`,
-      "replaced": `You have replaced ${gameState.player.spellToReplace} with ${selectedSpellName}.`,
       "failed": `You tried to practice ${selectedSpellName}, but you were not able to grasp the concept.`
-    }[result]
+    }[result];
 
     gameState.addLogEntry(resultMessage || '');
   }

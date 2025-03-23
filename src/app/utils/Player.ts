@@ -8,6 +8,7 @@ export default class Player {
   level: number;
   xpForNextLevel: number;
   spellToReplace?: string;
+  pendingSpell?: string;
 
   constructor() {
     this.health = 100;
@@ -19,6 +20,7 @@ export default class Player {
     this.level = 1;
     this.xpForNextLevel = 100; // Initial XP required for level 2
     this.spellToReplace = undefined;
+    this.pendingSpell = undefined;
   }
 
   gainXP(amount: number) {
@@ -64,7 +66,7 @@ export default class Player {
     this.maxHealth = 100;
   }
 
-  upgradeSpell(spellName: string) {
+  upgradeSpell(spellName: string, replaceSpell?: string) {
     const spell = this.spells.find(s => s.name === spellName);
     let result = "failed";
 
@@ -74,14 +76,13 @@ export default class Player {
     } else if (this.spells.length < this.level) {
       this.spells.push({ name: spellName, level: 1 });
       result = "learned";
-    } else if (this.spellToReplace) {
+    } else if (replaceSpell) {
       // Replace the specified spell
-      const index = this.spells.findIndex(s => s.name === this.spellToReplace);
+      const index = this.spells.findIndex(s => s.name === replaceSpell);
       if (index !== -1) {
         this.spells[index] = { name: spellName, level: 1 };
         result = "replaced";
       }
-      this.spellToReplace = undefined;
     }
 
     return result;
@@ -89,6 +90,22 @@ export default class Player {
 
   setSpellToReplace(spellName: string) {
     this.spellToReplace = spellName;
+  }
+
+  handleSpellChoice(chosenSpell?: string) {
+    if (!this.pendingSpell) return "no_pending_spell";
+    
+    if (!chosenSpell) {
+      // Player chose to keep their current spells
+      const result = "kept_current";
+      this.pendingSpell = undefined;
+      return result;
+    }
+
+    // Player chose to replace a spell
+    const result = this.upgradeSpell(this.pendingSpell, chosenSpell);
+    this.pendingSpell = undefined;
+    return result;
   }
 
   // Methods to manage player state

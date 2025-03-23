@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export const CURRENT_VERSION = "v0.2.0";
+export const CURRENT_VERSION = "v0.2.1";
 
 interface VersionContextType {
   version: string;

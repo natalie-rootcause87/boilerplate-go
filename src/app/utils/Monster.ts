@@ -43,7 +43,7 @@ export function getRandomMonster(currentTurn: number, playerLevel: number): Mons
   const selection = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
 
   // Scale monster health & attack based on turn count & player level
-  const difficultyMultiplier = 1 + (currentTurn / 100) + (playerLevel / 10); // Example scaling
+  const difficultyMultiplier = 1 + (currentTurn / 150) + (playerLevel / 15); // Example scaling
   selection.health = Math.floor(selection.health * difficultyMultiplier);
   selection.attack = Math.ceil(selection.attack * difficultyMultiplier);
 
