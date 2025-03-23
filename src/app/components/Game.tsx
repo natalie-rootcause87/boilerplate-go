@@ -138,7 +138,7 @@ export default function Game() {
                 const didLevelUp = updatedGameState.player.gainXP(effect.value);
                 if (didLevelUp) {
                   updatedGameState.addLogEntry(
-                    `You leveled up to ${updatedGameState.player.level}!`,
+                    'You leveled up to ' + updatedGameState.player.level + '!',
                     [
                       { type: 'MAXHP', value: updatedGameState.player.maxHealth - oldMaxHealth, target: 'none' },
                       { type: 'MAXMANA', value: updatedGameState.player.maxMana - oldMaxMana, target: 'none' }
@@ -182,7 +182,7 @@ export default function Game() {
               const didLevelUp = updatedGameState.player.gainXP(effect.value);
               if (didLevelUp) {
                 updatedGameState.addLogEntry(
-                  `You leveled up to ${updatedGameState.player.level}!`,
+                  'You leveled up to ' + updatedGameState.player.level + '!',
                   [
                     { type: 'MAXHP', value: updatedGameState.player.maxHealth - oldMaxHealth, target: 'none' },
                     { type: 'MAXMANA', value: updatedGameState.player.maxMana - oldMaxMana, target: 'none' }
@@ -259,13 +259,13 @@ export default function Game() {
     
     switch (result) {
       case "kept_current":
-        message = `You decided to keep your current spells and skip learning ${gameState.player.pendingSpell}.`;
+        message = 'You decided to keep your current spells and skip learning ' + gameState.player.pendingSpell + '.';
         break;
       case "replaced":
-        message = `You replaced ${chosenSpell} with ${gameState.player.pendingSpell}.`;
+        message = 'You replaced ' + chosenSpell + ' with ' + gameState.player.pendingSpell + '.';
         break;
       case "upgraded":
-        message = `You upgraded ${gameState.player.pendingSpell}.`;
+        message = 'You upgraded ' + gameState.player.pendingSpell + '.';
         break;
     }
     
@@ -674,10 +674,10 @@ export default function Game() {
             <div className="space-y-2 mb-6">
               <p className="font-bold">Changes in this version:</p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Added choice to keep or replace spells when at capacity</li>
-                <li>Clearer messaging about spell slot limits</li>
-                <li>Improved spell replacement interface</li>
-                <li>Fixed mobile layout issues</li>
+                <li>Fixed spell upgrade system</li>
+                <li>Spells now automatically level up when found again</li>
+                <li>No more confusing &ldquo;replace spell with itself&rdquo; prompts</li>
+                <li>Spell replacement only shows for genuinely new spells</li>
               </ul>
             </div>
             <button

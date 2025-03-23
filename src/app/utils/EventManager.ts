@@ -75,20 +75,28 @@ export default class EventManager {
     const randomSpell = learnableSpells[Math.floor(Math.random() * learnableSpells.length)];
     const selectedSpellName = spellOverride || randomSpell.name;
     
-    // If player has max spells, give them the choice to keep or replace
+    // First check if player already has this spell - if so, upgrade it
+    const existingSpell = gameState.player.spells.find(s => s.name === selectedSpellName);
+    if (existingSpell) {
+      gameState.player.upgradeSpell(selectedSpellName);
+      gameState.addLogEntry(`Practice has paid off. You have upgraded your ${selectedSpellName} spell to level ${existingSpell.level + 1}!`);
+      return;
+    }
+
+    // If it's a new spell and player is at capacity, give choice to replace
     if (gameState.player.spells.length >= gameState.player.level) {
       gameState.addLogEntry(
         `You found the ${selectedSpellName} spell! At level ${gameState.player.level}, ` +
         `you can only hold ${gameState.player.level} spells. ` +
         `Would you like to replace one of your current spells?`
       );
-      gameState.player.pendingSpell = selectedSpellName; // Store the new spell name
+      gameState.player.pendingSpell = selectedSpellName;
       return;
     }
 
+    // If it's a new spell and player has space, learn it
     const result = gameState.player.upgradeSpell(selectedSpellName);
     const resultMessage = {
-      "upgraded": `Practice has paid off. You have upgraded your spell: ${selectedSpellName}.`,
       "learned": `You have learned a new spell: ${selectedSpellName}.`,
       "failed": `You tried to practice ${selectedSpellName}, but you were not able to grasp the concept.`
     }[result];
