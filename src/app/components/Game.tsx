@@ -4,6 +4,8 @@ import EventManager from '../utils/EventManager';
 import Spell, { allSpells } from '../utils/Spell';
 import ProgressBar from './ProgressBar';
 
+const GAME_VERSION = "v0.2.0"; // Increment this when making gameplay changes
+
 export default function Game() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -16,6 +18,7 @@ export default function Game() {
   const [isTurnPaused, setIsTurnPaused] = useState(false);
   const [isSpellReplaceModalOpen, setIsSpellReplaceModalOpen] = useState(false);
   const [newSpellName, setNewSpellName] = useState<string>('');
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
 
   useEffect(() => {
     const newGameState = new GameState();
@@ -51,6 +54,14 @@ export default function Game() {
       setIsSpellReplaceModalOpen(true);
     }
   }, [gameState?.player.spellToReplace]);
+
+  useEffect(() => {
+    const lastVersion = localStorage.getItem('gameVersion');
+    if (!lastVersion || lastVersion !== GAME_VERSION) {
+      setIsFirstVisit(true);
+      localStorage.setItem('gameVersion', GAME_VERSION);
+    }
+  }, []);
 
   const getUpdatedGameLog = (prev: GameState | null) => {
     if (!prev || prev.isGameOver) {
@@ -231,6 +242,11 @@ export default function Game() {
     }
   };
 
+  const dismissVersionModal = () => {
+    setIsFirstVisit(false);
+    localStorage.setItem('gameVersion', GAME_VERSION);
+  };
+
   if (!gameState) {
     return <div>Loading...</div>;
   }
@@ -242,6 +258,7 @@ export default function Game() {
         <h1 className="text-xl sm:text-3xl font-extrabold tracking-wide uppercase">
           Donut Go
         </h1>
+        <div className="text-xs opacity-75 mt-1">{GAME_VERSION}</div>
       </header>
 
       {/* Main Container */}
@@ -577,6 +594,29 @@ export default function Game() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {isFirstVisit && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h2 className="text-lg sm:text-xl font-bold mb-4">Game Updated! {GAME_VERSION}</h2>
+            <div className="space-y-2 mb-6">
+              <p className="font-bold">Changes in this version:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Faster leveling progression</li>
+                <li>Increased health gain on level up (20 HP, up from 10)</li>
+                <li>Increased mana gain on level up (5 Mana, up from 2)</li>
+                <li>Health and mana now fully restore on level up</li>
+              </ul>
+            </div>
+            <button
+              onClick={dismissVersionModal}
+              className="w-full bg-pink-500 hover:bg-pink-600 transition-colors text-white font-bold py-2 px-4 rounded"
+            >
+              Got it!
+            </button>
           </div>
         </div>
       )}

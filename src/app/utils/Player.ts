@@ -37,9 +37,11 @@ export default class Player {
     if (this.xp < 0) {
       this.xp = 0;
     }
-    this.xpForNextLevel = Math.floor(this.xpForNextLevel * 1.2); // Increase XP required for next level
-    this.maxHealth += 10; // Increase max health per level
-    this.maxMana += 2; // Increase max mana per level
+    this.xpForNextLevel = Math.floor(this.xpForNextLevel * 1.1);
+    this.maxHealth += 20;
+    this.health += 20;
+    this.maxMana += 5;
+    this.mana = this.maxMana;
     console.log(`Leveled up to ${this.level}!`);
   }
 
