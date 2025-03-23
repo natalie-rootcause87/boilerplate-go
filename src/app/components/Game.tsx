@@ -19,7 +19,7 @@ export default function Game() {
   const [newSpellName, setNewSpellName] = useState<string>('');
   const { version, showVersionModal, setShowVersionModal, updateVersion } = useVersion();
   const [showDevButton, setShowDevButton] = useState(() => {
-    // Initialize based on localStorage
+    if (typeof window === 'undefined') return false;
     const hasSeenVersion = localStorage.getItem('gameVersion') === version;
     return !hasSeenVersion && process.env.NODE_ENV === 'development';
   });
