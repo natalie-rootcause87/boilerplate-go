@@ -238,18 +238,18 @@ export default function Game() {
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-pink-600 to-pink-800 flex flex-col items-center text-white">
       {/* Header / Title */}
-      <header className="w-full py-4 sm:py-6 text-center shadow-lg bg-pink-800/80 sticky top-0 z-10">
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-wide uppercase">
+      <header className="w-full py-3 text-center shadow-lg bg-pink-800/80 sticky top-0 z-10">
+        <h1 className="text-xl sm:text-3xl font-extrabold tracking-wide uppercase">
           Donut Go
         </h1>
       </header>
 
       {/* Main Container */}
-      <main className="flex-grow w-full max-w-5xl flex flex-col items-center p-2 sm:p-4">
+      <main className="flex-grow w-full max-w-5xl flex flex-col items-center p-2 sm:p-4 pb-20 sm:pb-4">
         {/* Player & Game Info */}
-        <section className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <section className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           {/* Player Stats Card */}
-          <div className="bg-pink-800/50 shadow-md rounded-lg p-4 sm:p-6">
+          <div className="bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6">
             <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">Player Stats</h2>
             <div className="flex flex-col items-center space-y-3 sm:space-y-4">
               <div className="text-base sm:text-lg">
@@ -329,19 +329,21 @@ export default function Game() {
           </div>
 
           {/* Game Log Card */}
-          <div className="relative bg-pink-800/50 shadow-md rounded-lg p-4 sm:p-6 flex flex-col h-[400px]">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">Game Log</h2>
+          <div className="relative bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6 flex flex-col h-[calc(100vh-20rem)] sm:h-[400px]">
+            <h2 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-4 text-center">Game Log</h2>
             {gameState.gameLog.length > 3 && (
               <button
                 onClick={toggleModal}
-                className="mb-2 bg-transparent hover:bg-white/10 transition-colors text-white font-bold py-2 px-4 rounded text-sm sm:text-base"
+                className="mb-2 bg-transparent hover:bg-white/10 transition-colors text-white font-bold py-1 px-3 rounded text-sm"
               >
                 View Full Log
               </button>
             )}
             <ul
               ref={logRef}
-              className="flex-grow overflow-y-auto space-y-2 px-2 sm:px-4 py-2 mb-16"
+              className={`flex-grow overflow-y-auto space-y-2 px-2 py-2 mb-16 ${
+                gameState.isGameOver ? 'mb-24' : ''
+              }`}
             >
               {gameState?.gameLog.length > 0 &&
                 gameState.gameLog
@@ -404,13 +406,16 @@ export default function Game() {
                   })}
             </ul>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-pink-800 via-pink-800/95 to-transparent">
+            {/* Action Button Container */}
+            <div className="fixed bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-pink-800 via-pink-800/95 to-transparent md:absolute md:p-4">
               {gameState.isGameOver ? (
-                <div className={`w-full bg-red-700/80 rounded-lg shadow-md p-4 text-center ${isTurnPaused ? 'opacity-0' : 'opacity-100'}`}>
-                  <h2 className="text-lg font-extrabold text-red-200 mb-4">Game Over</h2>
+                <div className={`w-full bg-red-700/80 rounded-lg shadow-md p-3 text-center ${
+                  isTurnPaused ? 'opacity-0' : 'opacity-100'
+                }`}>
+                  <h2 className="text-base font-extrabold text-red-200 mb-2">Game Over</h2>
                   <button
                     onClick={handleRestart}
-                    className="bg-red-500 hover:bg-red-600 transition-colors text-white font-bold py-2 px-4 rounded"
+                    className="bg-red-500 hover:bg-red-600 transition-colors text-white font-bold py-2 px-4 rounded text-sm"
                   >
                     Restart Game
                   </button>
@@ -419,7 +424,7 @@ export default function Game() {
                 <button
                   disabled={isTurnPaused}
                   onClick={handleAction}
-                  className="w-full bg-yellow-600 hover:bg-yellow-700 transition-colors text-white font-semibold py-3 px-8 rounded shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-yellow-600 hover:bg-yellow-700 transition-colors text-white font-semibold py-2 sm:py-3 px-4 rounded shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {gameStarted ? 'Continue' : 'Start Game'}
                 </button>
