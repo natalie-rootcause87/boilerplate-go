@@ -7,6 +7,7 @@ export default class Player {
   maxMana: number;
   level: number;
   xpForNextLevel: number;
+  spellToReplace?: string;
 
   constructor() {
     this.health = 100;
@@ -17,6 +18,7 @@ export default class Player {
     this.maxMana = 10;
     this.level = 1;
     this.xpForNextLevel = 100; // Initial XP required for level 2
+    this.spellToReplace = undefined;
   }
 
   gainXP(amount: number) {
@@ -63,16 +65,28 @@ export default class Player {
   upgradeSpell(spellName: string) {
     const spell = this.spells.find(s => s.name === spellName);
     let result = "failed";
+
     if (spell) {
       spell.level += 1;
-
-      result = "upgraded"
+      result = "upgraded";
     } else if (this.spells.length < this.level) {
       this.spells.push({ name: spellName, level: 1 });
-      result = "learned"
+      result = "learned";
+    } else if (this.spellToReplace) {
+      // Replace the specified spell
+      const index = this.spells.findIndex(s => s.name === this.spellToReplace);
+      if (index !== -1) {
+        this.spells[index] = { name: spellName, level: 1 };
+        result = "replaced";
+      }
+      this.spellToReplace = undefined;
     }
 
     return result;
+  }
+
+  setSpellToReplace(spellName: string) {
+    this.spellToReplace = spellName;
   }
 
   // Methods to manage player state
