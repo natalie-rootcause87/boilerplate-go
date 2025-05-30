@@ -24,9 +24,19 @@ export default function Game() {
     return !hasSeenVersion && process.env.NODE_ENV === 'development';
   });
   const [isSpellChoiceModalOpen, setIsSpellChoiceModalOpen] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [playerName, setPlayerName] = useState('');
+  const [leaderboard, setLeaderboard] = useState<Array<{name: string, level: number}>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('leaderboard');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
 
   useEffect(() => {
     const newGameState = new GameState();
+    newGameState.gameLog = []; // Clear the game log
     if (newGameState.unlockedSpells.length > 0) {
       const randomSpellName = newGameState.unlockedSpells[Math.floor(Math.random() * newGameState.unlockedSpells.length)];
       newGameState.player.spells.push({ name: randomSpellName, level: 1 });
@@ -59,12 +69,6 @@ export default function Game() {
       setIsSpellReplaceModalOpen(true);
     }
   }, [gameState?.player.spellToReplace]);
-
-  useEffect(() => {
-    if (gameState?.player.pendingSpell) {
-      setIsSpellChoiceModalOpen(true);
-    }
-  }, [gameState?.player.pendingSpell]);
 
   const getUpdatedGameLog = (prev: GameState | null) => {
     if (!prev || prev.isGameOver) {
@@ -115,11 +119,15 @@ export default function Game() {
     if (updatedGameLog) updatedGameState.gameLog = updatedGameLog;
 
     console.log('Continue button clicked');
-    // setRenderTrigger(prev => prev + 1);
 
     const lastTurnEntries = updatedGameLog?.[updatedGameLog.length - 1];
     if (Array.isArray(lastTurnEntries) && lastTurnEntries.some(entry => entry.message.includes('A wild'))) {
       pauseTurn();
+      // Initialize monster's health from the first entry
+      const monsterEntry = lastTurnEntries[0];
+      if (monsterEntry.message.includes('A wild') && updatedGameState.monster) {
+        updatedGameState.monster.health = updatedGameState.monster.maxHealth;
+      }
       setCurrentEntries([lastTurnEntries[0]]); // Set the first entry immediately
 
       // Show remaining entries with a short delay
@@ -127,44 +135,29 @@ export default function Game() {
       const intervalId = setInterval(() => {
         if (index > 1) {
           setCurrentEntries(prevEntries => [...prevEntries, lastTurnEntries[index - 1]]);
+          
+          // Update monster health based on effects
+          const entry = lastTurnEntries[index - 1];
+          entry.effect?.forEach(effect => {
+            if (effect.target === 'monster' && effect.type === 'HP' && updatedGameState.monster) {
+              updatedGameState.monster.health += effect.value;
+            }
+            if (effect.target === 'player' && effect.type === 'Mana' && updatedGameState.player) {
+              updatedGameState.player.mana += effect.value;
+            }
+          });
         }
 
         if (index < lastTurnEntries.length) {
-          lastTurnEntries[index].effect?.forEach(effect => {
-            if (effect.target === 'player') {
-              if (effect.type === 'XP') {
-                const oldMaxHealth = updatedGameState.player.maxHealth;
-                const oldMaxMana = updatedGameState.player.maxMana;
-                const didLevelUp = updatedGameState.player.gainXP(effect.value);
-                if (didLevelUp) {
-                  updatedGameState.addLogEntry(
-                    'You leveled up to ' + updatedGameState.player.level + '!',
-                    [
-                      { type: 'MAXHP', value: updatedGameState.player.maxHealth - oldMaxHealth, target: 'none' },
-                      { type: 'MAXMANA', value: updatedGameState.player.maxMana - oldMaxMana, target: 'none' }
-                    ]
-                  );
-                }
-              } else if (effect.type === 'HP') {
-                updatedGameState.player.health += effect.value;
-                if (updatedGameState.player.health > updatedGameState.player.maxHealth) {
-                  updatedGameState.player.health = updatedGameState.player.maxHealth;
-                }
-              } else if (effect.type === 'Mana') {
-                updatedGameState.player.mana += effect.value;
-                if (updatedGameState.player.mana > updatedGameState.player.maxMana) {
-                  updatedGameState.player.mana = updatedGameState.player.maxMana;
-                }
-              }
-            } else if (updatedGameState.monster && effect.target === 'monster') {
-              updatedGameState.monster.health += effect.value;
-            }
-          });
-          setGameState(updatedGameState);
+          setGameState(Object.assign(new GameState(), updatedGameState));
           index++;
         } else {
           clearInterval(intervalId);
           unpauseTurn();
+          // Only show spell choice modal after combat is complete
+          if (updatedGameState.player.pendingSpell) {
+            setIsSpellChoiceModalOpen(true);
+          }
         }
       }, 1000);
     } else {
@@ -173,39 +166,28 @@ export default function Game() {
       if (!updatedGameLog) return;
 
       const lastTurnLog = updatedGameLog[updatedGameLog.length - 1];
-      lastTurnLog?.forEach(entry => {
-        if (entry.effect) {
-          entry.effect.forEach(effect => {
-            if (effect.type === 'XP') {
-              const oldMaxHealth = updatedGameState.player.maxHealth;
-              const oldMaxMana = updatedGameState.player.maxMana;
-              const didLevelUp = updatedGameState.player.gainXP(effect.value);
-              if (didLevelUp) {
-                updatedGameState.addLogEntry(
-                  'You leveled up to ' + updatedGameState.player.level + '!',
-                  [
-                    { type: 'MAXHP', value: updatedGameState.player.maxHealth - oldMaxHealth, target: 'none' },
-                    { type: 'MAXMANA', value: updatedGameState.player.maxMana - oldMaxMana, target: 'none' }
-                  ]
-                );
-              }
-            } else if (effect.type === 'HP') {
-              updatedGameState.player.health += effect.value;
-              if (updatedGameState.player.health > updatedGameState.player.maxHealth) {
-                updatedGameState.player.health = updatedGameState.player.maxHealth;
-              }
-            }
-          });
-        }
-        setGameState(updatedGameState);
+      lastTurnLog?.forEach(() => {
+        setGameState(Object.assign(new GameState(), updatedGameState));
       });
+
+      // Show spell choice modal for non-combat spell rewards
+      if (updatedGameState.player.pendingSpell) {
+        setIsSpellChoiceModalOpen(true);
+      }
     }
+
+    setTimeout(() => {
+      if (logRef.current) {
+        logRef.current.scrollTop = logRef.current.scrollHeight;
+      }
+    }, 100);
   };
 
   const handleRestart = () => {
     console.log('Game restarted');
     const newGameState = new GameState();
     newGameState.resetGame();
+    newGameState.gameLog = []; // Clear the game log
     if (newGameState.unlockedSpells.length > 0) {
       const randomSpellName = newGameState.unlockedSpells[Math.floor(Math.random() * newGameState.unlockedSpells.length)];
       newGameState.player.spells.push({ name: randomSpellName, level: 1 });
@@ -222,6 +204,44 @@ export default function Game() {
     if (entry.message.includes('A wild')) return 'monster-encounter';
     if (entry.message.includes('You have practiced a spell')) return 'spell-selection';
     if (entry.message.includes('Nothing happens')) return 'nothing-happens';
+    return '';
+  };
+
+  const getEmojiClass = (entry: LogEntry) => {
+    // Spell casts
+    if (entry.message.includes('casts Fireball') || entry.message.includes('fiery explosion')) return 'emoji-float emoji-fireball';
+    if (entry.message.includes('Donut') || entry.message.includes('donut')) return 'emoji-float emoji-donut';
+    if (entry.message.includes('Freeze') || entry.message.includes('frozen')) return 'emoji-float emoji-freeze';
+    if (entry.message.includes('Healing Light') || entry.message.includes('warm light')) return 'emoji-float emoji-heal';
+    if (entry.message.includes('uses fists')) return 'emoji-float emoji-fist';
+    
+    // Monster events
+    if (entry.message.includes('A wild')) return 'emoji-float emoji-monster';
+    if (entry.message.includes('strikes back') || entry.message.includes('damage')) return 'emoji-float emoji-damage';
+    if (entry.message.includes('has been defeated')) return 'emoji-float emoji-damage';
+    
+    // Random events
+    if (entry.message.includes('shiny coin')) return 'emoji-float emoji-coin';
+    if (entry.message.includes('gentle breeze')) return 'emoji-float emoji-breeze';
+    if (entry.message.includes('bird sings')) return 'emoji-float emoji-bird';
+    if (entry.message.includes('sudden chill')) return 'emoji-float emoji-chill';
+    if (entry.message.includes('trip over')) return 'emoji-float emoji-trip';
+    if (entry.message.includes('hidden stash')) return 'emoji-float emoji-supplies';
+    if (entry.message.includes('sudden storm')) return 'emoji-float emoji-storm';
+    if (entry.message.includes('donut flies')) return 'emoji-float emoji-flying-donut';
+    
+    // Status effects
+    if (entry.message.includes('Level up')) return 'emoji-float emoji-level-up';
+    if (entry.message.includes('defeated a boss')) return 'emoji-float emoji-level-up';
+    if (entry.message.includes('found the') && entry.message.includes('spell')) return 'emoji-float emoji-level-up';
+    if (entry.message.includes('Practice has paid off')) return 'emoji-float emoji-level-up';
+    
+    // Effect-based emojis (if no specific message match)
+    if (entry.effect?.some(e => e.type === 'Mana')) return 'emoji-float emoji-mana';
+    if (entry.effect?.some(e => e.type === 'XP')) return 'emoji-float emoji-xp';
+    if (entry.effect?.some(e => e.type === 'HP' && e.value > 0)) return 'emoji-float emoji-heal';
+    if (entry.effect?.some(e => e.type === 'HP' && e.value < 0)) return 'emoji-float emoji-damage';
+    
     return '';
   };
 
@@ -259,10 +279,10 @@ export default function Game() {
     
     switch (result) {
       case "kept_current":
-        message = 'You decided to keep your current spells and skip learning ' + gameState.player.pendingSpell + '.';
+        message = 'You decided to keep your current spells and skipped learning a new spell.';
         break;
       case "replaced":
-        message = 'You replaced ' + chosenSpell + ' with ' + gameState.player.pendingSpell + '.';
+        message = 'You replaced ' + chosenSpell;
         break;
       case "upgraded":
         message = 'You upgraded ' + gameState.player.pendingSpell + '.';
@@ -275,6 +295,24 @@ export default function Game() {
     
     setIsSpellChoiceModalOpen(false);
     setGameState(Object.assign(new GameState(), gameState)); // Preserve class methods
+  };
+
+  const handleLeaderboardSubmit = () => {
+    if (!playerName.trim()) return;
+    
+    const newEntry = {
+      name: playerName.trim(),
+      level: gameState?.player.level || 1
+    };
+    
+    const updatedLeaderboard = [...leaderboard, newEntry]
+      .sort((a, b) => b.level - a.level)
+      .slice(0, 10); // Keep top 10
+    
+    setLeaderboard(updatedLeaderboard);
+    localStorage.setItem('leaderboard', JSON.stringify(updatedLeaderboard));
+    setShowLeaderboardModal(false);
+    setPlayerName('');
   };
 
   if (!gameState) {
@@ -296,10 +334,10 @@ export default function Game() {
         {/* Player & Game Info */}
         <section className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           {/* Player Stats Card */}
-          <div className="bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6">
+          <div className={`bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6`}>
             <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">Player Stats</h2>
             <div className="flex flex-col items-center space-y-3 sm:space-y-4">
-              <div className="text-base sm:text-lg">
+              <div className={`text-base sm:text-lg`}>
                 <span className="font-semibold">Level:</span> {gameState.player.level}
               </div>
               {/* Progress Bars (using donut-friendly colors) */}
@@ -308,13 +346,13 @@ export default function Game() {
               <ProgressBar label="Mana" value={gameState.player.mana >= 0 ? gameState.player.mana : 0} max={gameState.player.maxMana} color="bg-blue-400" />
 
               <div className="text-base sm:text-lg w-full">
-                <span className="font-semibold">Spells:</span>
+                <span className="font-semibold">{`Spells (${gameState.player.getActiveSpells().length}/${gameState.player.level}):`}</span>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {gameState.player.spells.length > 0
-                    ? gameState.player.spells
+                  {gameState.player.getActiveSpells().length > 0
+                    ? gameState.player.getActiveSpells()
                         .filter(
                           (spell, spellIndex) =>
-                            gameState.player.spells.findIndex(s => s.name === spell.name) === spellIndex
+                            gameState.player.getActiveSpells().findIndex(s => s.name === spell.name) === spellIndex
                         )
                         .map(spell => (
                           <button
@@ -322,7 +360,7 @@ export default function Game() {
                             onClick={() => handleSpellClick(spell.name)}
                             className="px-3 py-1.5 bg-pink-700 hover:bg-pink-600 rounded-full text-sm transition-colors"
                           >
-                            {spell.name}
+                            {spell.name} {spell.level}
                           </button>
                         ))
                     : <span className="text-gray-300">None</span>}
@@ -343,7 +381,9 @@ export default function Game() {
                         currentEntries[currentEntries.length - 1].message.includes('spell') ? 'glow' : ''
                       }`}
                     >
-                      {currentEntries[currentEntries.length - 1].message}
+                      <span className={getEmojiClass(currentEntries[currentEntries.length - 1])}>
+                        {currentEntries[currentEntries.length - 1].message}
+                      </span>
                       {currentEntries[currentEntries.length - 1].effect
                         ?.filter(effect => effect.target !== 'monster')
                         .map((effect, effectIndex) => (
@@ -368,7 +408,7 @@ export default function Game() {
                 <ProgressBar
                   label="Monster"
                   value={gameState.monster.health > 0 ? gameState.monster.health : 0}
-                  max={gameState.monster.difficultyLevel * 45}
+                  max={gameState.monster.maxHealth}
                   color="bg-purple-400"
                 />
               </div>
@@ -378,7 +418,7 @@ export default function Game() {
           {/* Game Log Card */}
           <div className="relative bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6 flex flex-col h-[calc(100vh-20rem)] sm:h-[400px]">
             <h2 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-4 text-center">Game Log</h2>
-            {gameState.gameLog.length > 3 && (
+            {!!gameState.gameLog.length && !gameState.isGameOver && (
               <button
                 onClick={toggleModal}
                 className="mb-2 bg-transparent hover:bg-white/10 transition-colors text-white font-bold py-1 px-3 rounded text-sm"
@@ -392,7 +432,7 @@ export default function Game() {
                 gameState.isGameOver ? 'mb-24' : ''
               }`}
             >
-              {gameStarted && gameState?.gameLog.length &&
+              {gameStarted && gameState?.gameLog.length > 0 ? (
                 gameState.gameLog
                   .slice(Math.max(gameState.gameLog.length - 3, 0))
                   .map((turnEntries: LogEntry[], turnIndex) => {
@@ -414,7 +454,9 @@ export default function Game() {
                                   turnIndex === 2 ? 'highlight' : ''
                                 } ${turnIndex === 2 ? getAnimationClass(lastEntry) : ''}`}
                               >
-                                {lastEntry.message}
+                                <span className={getEmojiClass(lastEntry)}>
+                                  {lastEntry.message}
+                                </span>
                                 {lastEntry.effect && (
                                   <span
                                     className={`text-xs ml-2 ${
@@ -450,14 +492,14 @@ export default function Game() {
                         )}
                       </li>
                     );
-                  })}
-                  {gameState?.gameLog.length < 1 && !gameStarted && (
-                    <li>
-                      <div className="font-bold text-sm sm:text-base">
-                        Welcome to Donut Go, a game!
-                      </div>
-                    </li>
-                  )}
+                  })
+              ) : !gameStarted ? (
+                <li>
+                  <div className="font-bold text-sm sm:text-base">
+                    Welcome to Donut Go, a game!
+                  </div>
+                </li>
+              ) : null}
             </ul>
 
             {/* Action Button Container */}
@@ -468,8 +510,14 @@ export default function Game() {
                 }`}>
                   <h2 className="text-base font-extrabold text-red-200 mb-2">Game Over</h2>
                   <button
+                    onClick={() => setShowLeaderboardModal(true)}
+                    className="bg-pink-500 hover:bg-pink-600 transition-colors text-white font-bold py-2 px-4 rounded mb-2"
+                  >
+                    Add to Leaderboard
+                  </button>
+                  <button
                     onClick={handleRestart}
-                    className="bg-red-500 hover:bg-red-600 transition-colors text-white font-bold py-2 px-4 rounded text-sm"
+                    className="bg-gray-500 hover:bg-gray-600 transition-colors text-white font-bold py-2 px-4 rounded"
                   >
                     Restart Game
                   </button>
@@ -502,9 +550,11 @@ export default function Game() {
                       ? turnEntries.map((entry, entryIndex) => (
                           <li
                             key={`entryIndex1-${entryIndex}`}
-                            className="text-sm bg-gray-100 p-3 rounded mt-1"
+                            className={`text-sm bg-gray-100 p-3 rounded mt-1`}
                           >
-                            {entry.message}
+                            <span className={getEmojiClass(entry)}>
+                              {entry.message}
+                            </span>
                             {entry.effect?.map((effect, effectIndex) => (
                               <span
                                 key={`effectIndex1-${entryIndex}-${effectIndex}`}
@@ -552,7 +602,9 @@ export default function Game() {
                       entry.message.includes('A wild') ? 'shake' : ''
                     } ${entry.message.includes('spell') ? 'glow' : ''}`}
                   >
-                    {entry.message}
+                    <span className={getEmojiClass(entry)}>
+                      {entry.message}
+                    </span>
                     {entry.effect
                       ?.filter(effect => effect.target !== 'monster')
                       .map((effect, effectIndex) => (
@@ -600,7 +652,7 @@ export default function Game() {
               </p>
               <p>
                 <strong>Level:</strong>{' '}
-                {gameState.player.spells.find(s => s.name === selectedSpell.name)?.level}
+                {gameState.player.getActiveSpells().find(s => s.name === selectedSpell.name)?.level}
               </p>
             </div>
             <button
@@ -619,7 +671,7 @@ export default function Game() {
             <h2 className="text-lg sm:text-xl font-bold mb-4">Replace a Spell</h2>
             <p className="mb-4">Choose a spell to replace with {newSpellName}:</p>
             <ul className="space-y-2">
-              {gameState?.player.spells.map((spell, index) => (
+              {gameState?.player.getActiveSpells().map((spell, index) => (
                 <li key={`spell-${index}`}>
                   <button
                     onClick={() => handleSpellClick(spell.name)}
@@ -639,29 +691,39 @@ export default function Game() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
             <h2 className="text-lg sm:text-xl font-bold mb-4">New Spell Found!</h2>
-            <p className="mb-4">
-              You discovered {gameState.player.pendingSpell}! At level {gameState.player.level}, 
-              you can only hold {gameState.player.level} spells. Would you like to replace one 
-              of your current spells?
+            <p className="mb-4 text-center">
+              You discovered {gameState.player.pendingSpell}!{gameState.player.spells.length > gameState.player.level ? ` At level ${gameState.player.level}, 
+              you can only hold ${gameState.player.level} spell${gameState.player.level > 1 ? 's' : ''}. Would you like to replace one of your current spells?` : ''}
             </p>
             <div className="space-y-3">
-              <p className="font-semibold">Your current spells:</p>
-              {gameState.player.spells.map((spell) => (
+              {gameState.player.spells.length < gameState.player.level ? (
                 <button
-                  key={spell.name}
-                  onClick={() => handleSpellChoice(spell.name)}
-                  className="w-full text-left p-3 hover:bg-gray-100 rounded transition-colors flex justify-between items-center"
+                  onClick={() => handleSpellChoice(gameState.player.pendingSpell)}
+                  className="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded"
                 >
-                  <span>Replace {spell.name} with {gameState?.player.pendingSpell}</span>
-                  <span className="text-sm text-gray-600">Level {spell.level}</span>
+                  Learn {gameState.player.pendingSpell}
                 </button>
-              ))}
-              <button
-                onClick={() => handleSpellChoice()}
-                className="w-full mt-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
-              >
-                Keep Current Spells
-              </button>
+              ) : (
+                <>
+                  <p className="font-semibold">Your current spells:</p>
+                  {gameState.player.getActiveSpells().map((spell) => (
+                    <button
+                      key={spell.name}
+                      onClick={() => handleSpellChoice(spell.name)}
+                      className="w-full text-left p-3 hover:bg-gray-100 rounded transition-colors flex justify-between items-center"
+                    >
+                      <span>Replace {spell.name} with {gameState?.player.pendingSpell}</span>
+                      <span className="text-sm text-gray-600">Level {spell.level}</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => handleSpellChoice()}
+                    className="w-full mt-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+                  >
+                    Keep Current Spells
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -674,10 +736,10 @@ export default function Game() {
             <div className="space-y-2 mb-6">
               <p className="font-bold">Changes in this version:</p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Fixed spell upgrade system</li>
-                <li>Spells now automatically level up when found again</li>
-                <li>No more confusing &ldquo;replace spell with itself&rdquo; prompts</li>
-                <li>Spell replacement only shows for genuinely new spells</li>
+                <li>Added animated emojis for all game events! <span className="emoji-float emoji-level-up">✨</span></li>
+                <li>Fixed spell choice timing during combat</li>
+                <li>Improved combat animations and effects</li>
+                <li>Better visual feedback for all actions</li>
               </ul>
             </div>
             <button
@@ -697,6 +759,41 @@ export default function Game() {
         >
           Test Version Update
         </button>
+      )}
+
+      {showLeaderboardModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Leaderboard</h2>
+            <div className="mb-4">
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full p-2 border rounded mb-2"
+                maxLength={20}
+              />
+              <button
+                onClick={handleLeaderboardSubmit}
+                className="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded"
+              >
+                Submit Score
+              </button>
+            </div>
+            <div className="mt-4">
+              <h3 className="font-bold mb-2">Top Players</h3>
+              <div className="space-y-2">
+                {leaderboard.map((entry, index) => (
+                  <div key={index} className="flex justify-between items-center bg-gray-100 p-2 rounded">
+                    <span>{entry.name}</span>
+                    <span className="font-bold">Level {entry.level}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

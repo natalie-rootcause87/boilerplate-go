@@ -3,6 +3,8 @@ import { allSpells } from './Spell';
 import { getRandomBossMonster, getRandomMonster } from './Monster';
 
 export default class EventManager {
+  private static lastEventType: string | null = null;
+
   static triggerEvent(gameState: GameState): GameState {
     gameState.startNewTurn();
 
@@ -10,17 +12,40 @@ export default class EventManager {
     const isBossFight = gameState.gameLog.length % 30 === 0;
     const randomValue = Math.random() * 100;
 
+    // Determine available event types
+    const availableEvents = [];
     if (isFight || isBossFight) {
-      this.monsterEncounter(gameState, isBossFight);
-    } else if (randomValue < 12) {
-      // 12% chance for a Monster encounter
-      this.monsterEncounter(gameState);
-    } else if (randomValue < 22) {
-      // 10% chance for a Spell selection
-      this.spellSelection(gameState);
+      availableEvents.push('monster');
     } else {
-      // 78% chance for a Random Event
+      if (this.lastEventType !== 'monster' && randomValue < 12) {
+        availableEvents.push('monster');
+      }
+      if (this.lastEventType !== 'spell' && randomValue < 22) {
+        availableEvents.push('spell');
+      }
+      if (this.lastEventType !== 'random') {
+        availableEvents.push('random');
+      }
+    }
+
+    // If no events are available, default to random event
+    if (availableEvents.length === 0) {
+      availableEvents.push('random');
+    }
+
+    // Select a random event from available events
+    const selectedEvent = availableEvents[Math.floor(Math.random() * availableEvents.length)];
+
+    // Trigger the selected event
+    if (selectedEvent === 'monster') {
+      this.monsterEncounter(gameState, isBossFight);
+      this.lastEventType = 'monster';
+    } else if (selectedEvent === 'spell') {
+      this.spellSelection(gameState);
+      this.lastEventType = 'spell';
+    } else {
       this.randomEvent(gameState);
+      this.lastEventType = 'random';
     }
 
     // Return the updated game state
@@ -29,25 +54,27 @@ export default class EventManager {
 
   static randomEvent(gameState: GameState) {
     const events = [
-      { message: "You find a shiny coin on the ground.", type: "good", affects: "XP", value: Math.floor(Math.random() * 10) + 1 },
+      { message: "You find a shiny coin on the ground.", type: "good", affects: "XP", value: Math.floor(Math.random() * 5) + 1 },
       { message: "A gentle breeze refreshes you.", type: "good", affects: "HP", value: Math.floor(Math.random() * 5) + 1 },
       { message: "You hear distant laughter.", type: "neutral", affects: "none", value: 0 },
-      { message: "A bird sings a beautiful song.", type: "good", affects: "XP", value: Math.floor(Math.random() * 5) + 1 },
+      { message: "A bird sings a beautiful song.", type: "good", affects: "XP", value: Math.floor(Math.random() * 3) + 1 },
       { message: "You feel a sudden chill.", type: "bad", affects: "HP", value: -(Math.floor(Math.random() * 5) + 1) },
       { message: "You trip over a root and fall.", type: "bad", affects: "HP", value: -(Math.floor(Math.random() * 10) + 1) },
-      { message: "You find a hidden stash of supplies.", type: "good", affects: "XP", value: Math.floor(Math.random() * 15) + 5 },
+      { message: "You find a hidden stash of supplies.", type: "good", affects: "XP", value: Math.floor(Math.random() * 5) + 1 },
       { message: "A sudden storm drenches you.", type: "bad", affects: "HP", value: -(Math.floor(Math.random() * 3) + 1) },
       { message: "A donut flies by. You eat it", type: "good", affects: "HP", value: Math.floor(Math.random() * 10) + 1 }
     ];
 
     const randomEvent = events[Math.floor(Math.random() * events.length)];
-    // let messageAddition = '';
 
     if (randomEvent.affects === "XP") {
-      // messageAddition = `You gain ${randomEvent.value} XP.`;
+      const didLevelUp = gameState.player.gainXP(randomEvent.value);
       gameState.addLogEntry(randomEvent.message, [{ type: 'XP', value: randomEvent.value, target: 'player' }]);
+      if (didLevelUp) {
+        gameState.addLogEntry(`Level up! You are now level ${gameState.player.level}!`);
+      }
     } else if (randomEvent.affects === "HP") {
-      // messageAddition = `Your health changes by ${randomEvent.value}.`;
+      gameState.player.increaseHealth(randomEvent.value);
       gameState.addLogEntry(randomEvent.message, [{ type: 'HP', value: randomEvent.value, target: 'player' }]);
 
       // Check if the player's health is zero or below
@@ -63,7 +90,7 @@ export default class EventManager {
 
   static monsterEncounter(gameState: GameState, isBossFight: boolean = false) {
     const difficultyLevel = Math.floor(gameState.gameLog.length / 10) + 1; // Increase difficulty over time
-    const monster = isBossFight ? getRandomBossMonster(gameState.gameLog.length) : getRandomMonster(gameState.gameLog.length, difficultyLevel);
+    const monster = isBossFight ? getRandomBossMonster() : getRandomMonster(gameState.gameLog.length, difficultyLevel);
     gameState.monster = monster;
     gameState.addLogEntry(`A wild ${monster.name} appears!`);
     gameState.combat(monster);
@@ -79,29 +106,18 @@ export default class EventManager {
     const existingSpell = gameState.player.spells.find(s => s.name === selectedSpellName);
     if (existingSpell) {
       gameState.player.upgradeSpell(selectedSpellName);
-      gameState.addLogEntry(`Practice has paid off. You have upgraded your ${selectedSpellName} spell to level ${existingSpell.level + 1}!`);
+      gameState.addLogEntry(`Practice has paid off. You have upgraded your ${selectedSpellName} spell to level ${existingSpell.level}!`);
       return;
     }
 
-    // If it's a new spell and player is at capacity, give choice to replace
-    if (gameState.player.spells.length >= gameState.player.level) {
-      gameState.addLogEntry(
-        `You found the ${selectedSpellName} spell! At level ${gameState.player.level}, ` +
-        `you can only hold ${gameState.player.level} spells. ` +
-        `Would you like to replace one of your current spells?`
-      );
-      gameState.player.pendingSpell = selectedSpellName;
-      return;
-    }
-
-    // If it's a new spell and player has space, learn it
-    const result = gameState.player.upgradeSpell(selectedSpellName);
-    const resultMessage = {
-      "learned": `You have learned a new spell: ${selectedSpellName}.`,
-      "failed": `You tried to practice ${selectedSpellName}, but you were not able to grasp the concept.`
-    }[result];
-
-    gameState.addLogEntry(resultMessage || '');
+    // Store the spell as pending - it will be added to the player's spells after combat
+    gameState.addLogEntry(
+      `You found the ${selectedSpellName} spell! ${gameState.player.getActiveSpells().length > gameState.player.level ? `At level ${gameState.player.level}, ` +
+      `you can only hold ${gameState.player.level} spell${gameState.player.level > 1 ? 's' : ''}. ` +
+      `You can choose what to do with it after the battle.` : ''}`
+    );
+    gameState.player.pendingSpell = selectedSpellName;
+    gameState.player.pendingSpellLevel = 1;
   }
 
   static narrativeEvent(gameState: GameState) {

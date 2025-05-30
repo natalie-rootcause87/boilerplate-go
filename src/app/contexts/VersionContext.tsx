@@ -13,8 +13,8 @@ interface VersionContextType {
 
 const VersionContext = createContext<VersionContextType | undefined>(undefined);
 
-export function VersionProvider({ children }: { children: React.ReactNode }) {
-  const [version, setVersion] = useState(CURRENT_VERSION);
+export const VersionProvider = ({ children }: { children: React.ReactNode }) => {
+  const [version, setVersion] = useState('v1.2.0');
   const [showVersionModal, setShowVersionModal] = useState(false);
 
   useEffect(() => {

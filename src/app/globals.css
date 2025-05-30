@@ -111,3 +111,132 @@ body {
 .floating-text {
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
+
+/* Emoji animations */
+.emoji-float {
+  display: inline-block;
+  position: relative;
+  animation: textHighlight 1s ease-out;
+}
+
+.emoji-float::after {
+  content: attr(data-emoji);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  animation: floatEmoji 1.5s ease-out forwards;
+  font-size: 1.2em;
+  z-index: 10;
+  pointer-events: none;
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+@keyframes floatEmoji {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(50px, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(100px, -50%);
+  }
+}
+
+@keyframes textHighlight {
+  0% {
+    background: transparent;
+  }
+  30% {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .emoji-float::after {
+    text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+  }
+  
+  @keyframes textHighlight {
+    0% {
+      background: transparent;
+    }
+    30% {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    100% {
+      background: transparent;
+    }
+  }
+}
+
+/* Specific emoji animations */
+.emoji-fireball::after { content: '🔥'; }
+.emoji-donut::after { content: '🍩'; }
+.emoji-freeze::after { content: '❄️'; }
+.emoji-heal::after { content: '💚'; }
+.emoji-fist::after { content: '👊'; }
+.emoji-monster::after { content: '👾'; }
+.emoji-coin::after { content: '💰'; }
+.emoji-breeze::after { content: '🌬️'; }
+.emoji-bird::after { content: '🐦'; }
+.emoji-chill::after { content: '🥶'; }
+.emoji-trip::after { content: '🌳'; }
+.emoji-supplies::after { content: '📦'; }
+.emoji-storm::after { content: '⛈️'; }
+.emoji-flying-donut::after { content: '🍩'; }
+.emoji-level-up::after { content: '⭐'; }
+.emoji-damage::after { content: '💥'; }
+.emoji-mana::after { content: '🔮'; }
+.emoji-xp::after { content: '✨'; }
+
+@keyframes levelUp {
+  0% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.2); filter: brightness(1.5); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes levelUpGlow {
+  0% { box-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700; }
+  50% { box-shadow: 0 0 20px #ffd700, 0 0 30px #ffd700; }
+  100% { box-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700; }
+}
+
+@keyframes statIncrease {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { transform: translateY(-20px); opacity: 1; }
+  80% { transform: translateY(-20px); opacity: 1; }
+  100% { transform: translateY(-40px); opacity: 0; }
+}
+
+.level-up-animation {
+  animation: levelUp 1s ease-in-out;
+}
+
+.level-up-glow {
+  animation: levelUpGlow 1s ease-in-out infinite;
+}
+
+.stat-increase {
+  position: absolute;
+  color: #ffd700;
+  font-weight: bold;
+  animation: statIncrease 2s ease-out forwards;
+  pointer-events: none;
+  text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+}

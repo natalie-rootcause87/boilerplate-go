@@ -1,112 +1,149 @@
+export type Spell = { name: string; level: number };
+
 export default class Player {
   health: number;
   maxHealth: number;
-  spells: { name: string; level: number }[];
-  xp: number;
   mana: number;
   maxMana: number;
   level: number;
+  xp: number;
   xpForNextLevel: number;
+  spells: Spell[];
   spellToReplace?: string;
   pendingSpell?: string;
+  pendingSpellLevel: number;
 
   constructor() {
-    this.health = 100;
-    this.maxHealth = 100;
-    this.spells = [];
-    this.xp = 0;
-    this.mana = 0;
+    this.health = this.maxHealth = 100;
     this.maxMana = 10;
+    this.mana = 0;
     this.level = 1;
-    this.xpForNextLevel = 100; // Initial XP required for level 2
-    this.spellToReplace = undefined;
-    this.pendingSpell = undefined;
+    this.xp = 0;
+    this.xpForNextLevel = this.calculateXpForNextLevel(this.level);
+    this.spells = [];
+    this.pendingSpellLevel = 1;
+    this.logState('Initialized');
   }
 
-  gainXP(amount: number) {
+  // --- XP & Leveling ---
+
+  gainXP(amount: number): boolean {
+    this.log(`[XP Gain] +${amount} XP (was ${this.xp}/${this.xpForNextLevel})`);
     this.xp += amount;
     let didLevelUp = false;
-    while (this.xp >= this.xpForNextLevel) {
-      this.levelUp();
+    if (this.xp >= this.xpForNextLevel) {
       didLevelUp = true;
+      this.levelUp();
     }
+    this.logState('After gainXP');
     return didLevelUp;
   }
 
-  levelUp() {
-    this.level += 1;
+  private levelUp() {
+    const oldLevel = this.level;
+    this.level++;
     this.xp -= this.xpForNextLevel;
-    if (this.xp < 0) {
-      this.xp = 0;
-    }
-    this.xpForNextLevel = Math.floor(this.xpForNextLevel * 1.1);
+    if (this.xp < 0) this.xp = 0;
+    this.xpForNextLevel = this.calculateXpForNextLevel(this.level);
     this.maxHealth += 20;
-    this.health += 20;
+    this.health = this.maxHealth;
     this.maxMana += 5;
     this.mana = this.maxMana;
-    console.log(`Leveled up to ${this.level}!`);
+    this.log(`[Level Up] ${oldLevel} → ${this.level} | XP: ${this.xp}/${this.xpForNextLevel}`);
   }
 
+  private calculateXpForNextLevel(level: number): number {
+    return Math.floor(10 * Math.pow(3, level - 1));
+  }
+
+  // --- Health & Mana ---
+
   gainMana(amount: number) {
-    this.mana += amount;
-    if (this.mana > this.maxMana) {
-      this.mana = this.maxMana;
-    }
+    this.mana = Math.min(this.maxMana, this.mana + amount);
+    this.log(`[Mana] +${amount} → ${this.mana}/${this.maxMana}`);
   }
 
   increaseHealth(amount: number) {
-    this.health += amount;
-    if (this.health > this.maxHealth) {
-      this.maxHealth = this.health;
-    }
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    this.log(`[Health] +${amount} → ${this.health}/${this.maxHealth}`);
   }
 
   resetHealth() {
-    this.health = 100;
-    this.maxHealth = 100;
+    this.health = this.maxHealth = 100;
+    this.log('[Health] Reset to 100');
   }
 
-  upgradeSpell(spellName: string, replaceSpell?: string) {
-    const spell = this.spells.find(s => s.name === spellName);
-    let result = "failed";
+  // --- Spells ---
 
+  earnSpell(spellName: string, level: number = 1) {
+    this.pendingSpell = spellName;
+    this.pendingSpellLevel = level;
+    this.log(`[Spell] Pending: ${spellName} (level ${level})`);
+  }
+
+  resolvePendingSpell() {
+    if (!this.pendingSpell) return null;
+    const result = this.upgradeSpell(this.pendingSpell);
+    const spellName = this.pendingSpell;
+    this.pendingSpell = undefined;
+    this.pendingSpellLevel = 1;
+    this.log(`[Spell] Resolved: ${spellName} (${result})`);
+    return { spellName, result };
+  }
+
+  upgradeSpell(spellName: string, replaceSpell?: string): 'upgraded' | 'learned' | 'replaced' | 'failed' {
+    const spell = this.spells.find(s => s.name === spellName);
     if (spell) {
-      spell.level += 1;
-      result = "upgraded";
-    } else if (this.spells.length < this.level) {
-      this.spells.push({ name: spellName, level: 1 });
-      result = "learned";
-    } else if (replaceSpell) {
-      // Replace the specified spell
-      const index = this.spells.findIndex(s => s.name === replaceSpell);
-      if (index !== -1) {
-        this.spells[index] = { name: spellName, level: 1 };
-        result = "replaced";
+      spell.level++;
+      this.log(`[Spell] Upgraded: ${spellName} to level ${spell.level}`);
+      return 'upgraded';
+    }
+    if (this.spells.length < this.level) {
+      this.spells.push({ name: spellName, level: this.pendingSpellLevel });
+      this.log(`[Spell] Learned: ${spellName} at level ${this.pendingSpellLevel}`);
+      return 'learned';
+    }
+    if (replaceSpell) {
+      const idx = this.spells.findIndex(s => s.name === replaceSpell);
+      if (idx !== -1) {
+        this.spells[idx] = { name: spellName, level: this.pendingSpellLevel };
+        this.log(`[Spell] Replaced: ${replaceSpell} with ${spellName}`);
+        return 'replaced';
       }
     }
-
-    return result;
+    this.log(`[Spell] Failed to learn/replace: ${spellName}`);
+    return 'failed';
   }
 
   setSpellToReplace(spellName: string) {
     this.spellToReplace = spellName;
+    this.log(`[Spell] Set to replace: ${spellName}`);
   }
 
-  handleSpellChoice(chosenSpell?: string) {
-    if (!this.pendingSpell) return "no_pending_spell";
-    
+  handleSpellChoice(chosenSpell?: string): string {
+    if (!this.pendingSpell) return 'no_pending_spell';
+    let result: string;
     if (!chosenSpell) {
-      // Player chose to keep their current spells
-      const result = "kept_current";
-      this.pendingSpell = undefined;
-      return result;
+      result = 'kept_current';
+    } else {
+      result = this.upgradeSpell(this.pendingSpell, chosenSpell);
     }
-
-    // Player chose to replace a spell
-    const result = this.upgradeSpell(this.pendingSpell, chosenSpell);
     this.pendingSpell = undefined;
+    this.log(`[Spell] Choice handled: ${result}`);
     return result;
   }
 
-  // Methods to manage player state
+  getActiveSpells(): Spell[] {
+    return this.spells;
+  }
+
+  // --- Logging ---
+
+  private log(msg: string) {
+    console.log(`[Player] ${msg}`);
+  }
+
+  private logState(context: string) {
+    console.log(`[Player] ${context} | Level: ${this.level}, XP: ${this.xp}/${this.xpForNextLevel}, HP: ${this.health}/${this.maxHealth}, Mana: ${this.mana}/${this.maxMana}, Spells: ${this.spells.length}`);
+  }
 }

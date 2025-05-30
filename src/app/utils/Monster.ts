@@ -1,6 +1,7 @@
 export class Monster {
   name: string;
   health: number;
+  maxHealth: number;
   attack: number;
   difficultyLevel: number;
   xpReward: number;
@@ -11,6 +12,7 @@ export class Monster {
   constructor(name: string, difficultyLevel: number, manaOnHit: number, activeAfterTurn: number) {
     this.name = name;
     this.health = Math.floor(difficultyLevel * 45);
+    this.maxHealth = this.health;
     this.attack = Math.ceil(difficultyLevel * 1.5);
     this.difficultyLevel = difficultyLevel;
     this.xpReward = Math.floor(difficultyLevel * 10);
@@ -44,14 +46,19 @@ export function getRandomMonster(currentTurn: number, playerLevel: number): Mons
 
   // Scale monster health & attack based on turn count & player level
   const difficultyMultiplier = 1 + (currentTurn / 150) + (playerLevel / 15); // Example scaling
-  selection.health = Math.floor(selection.health * difficultyMultiplier);
-  selection.attack = Math.ceil(selection.attack * difficultyMultiplier);
-
-  return { ...selection };
+  const scaledHealth = Math.floor(selection.maxHealth * difficultyMultiplier);
+  const scaledAttack = Math.ceil(selection.attack * difficultyMultiplier);
+  return {
+    ...selection,
+    health: scaledHealth,
+    maxHealth: scaledHealth,
+    attack: scaledAttack
+  };
 }
 
-export function getRandomBossMonster(currentTurn: number): Monster {
-  const availableBossMonsters = BossMonsterPool.filter(monster => monster.activeAfterTurn <= currentTurn);
-  return availableBossMonsters[Math.floor(Math.random() * availableBossMonsters.length)];
+export function getRandomBossMonster(): Monster {
+  const selection = BossMonsterPool[Math.floor(Math.random() * BossMonsterPool.length)];
+  // You can add scaling for boss monsters here if needed
+  return { ...selection };
 }
 
