@@ -204,6 +204,7 @@ body {
 .emoji-damage::after { content: '💥'; }
 .emoji-mana::after { content: '🔮'; }
 .emoji-xp::after { content: '✨'; }
+.emoji-laugh::after { content: '😂'; }
 
 @keyframes levelUp {
   0% { 

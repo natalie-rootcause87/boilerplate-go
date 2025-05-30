@@ -231,6 +231,10 @@ export default function Game() {
       console.log('Matched: fist');
       return 'emoji-float emoji-fist';
     }
+    if (entry.message.includes('laugh')) {
+      console.log('Matched: laugh');
+      return 'emoji-float emoji-laugh';
+    }
     
     // Monster events
     if (entry.message.includes('A wild')) {
