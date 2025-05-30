@@ -113,6 +113,7 @@ export default class GameState {
     const maxTurns = 100;
     monster.frozenTurns = 0; // Initialize frozen turns
     let earnedDonutSpell = false;
+    let activeSpell = null;
 
     while (monsterHp >= 0 && playerHp > 0 && turnCount < maxTurns) {
       turnCount++;
@@ -129,6 +130,7 @@ export default class GameState {
       
       if (eligibleSpells.length > 0) {
         const randomSpell = eligibleSpells[Math.floor(Math.random() * eligibleSpells.length)];
+        activeSpell = randomSpell;
 
         if (randomSpell) {
           const logEntry = randomSpell.applyEffect(playerMana) as LogEntry;
@@ -176,9 +178,9 @@ export default class GameState {
       // Monster's return strike - only if not frozen
       if (monster.frozenTurns > 0) {
         monster.frozenTurns--;
-        const message = monster.frozenTurns > 0 
-          ? `${monster.name} is frozen and cannot attack! (${monster.frozenTurns} turns remaining)`
-          : `${monster.name} thawed out!`;
+        const message = monster.frozenTurns > 1 
+          ? `${monster.name} is ${activeSpell?.name === 'Donut' ? 'eating a donut' : 'frozen'} and cannot attack! (${monster.frozenTurns} turns remaining)`
+          : activeSpell?.name === 'Donut' ? `${monster.name} enjoyed a yummy donut and forgot to attack you!` : `${monster.name} thawed out!`;
         this.addLogEntry(message);
       } else {
         const monsterDamage = monster.attack * Math.floor(Math.random() * 5) + 1;

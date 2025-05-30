@@ -4,6 +4,7 @@ import EventManager from '../utils/EventManager';
 import Spell, { allSpells } from '../utils/Spell';
 import ProgressBar from './ProgressBar';
 import { useVersion } from '../contexts/VersionContext';
+import { LeaderboardEntry } from '../../types/leaderboard';
 
 export default function Game() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -24,15 +25,10 @@ export default function Game() {
     return !hasSeenVersion && process.env.NODE_ENV === 'development';
   });
   const [isSpellChoiceModalOpen, setIsSpellChoiceModalOpen] = useState(false);
-  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [playerName, setPlayerName] = useState('');
-  const [leaderboard, setLeaderboard] = useState<Array<{name: string, level: number}>>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('leaderboard');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardError, setLeaderboardError] = useState<string>('');
+  const [hasSubmittedScore, setHasSubmittedScore] = useState(false);
 
   useEffect(() => {
     const newGameState = new GameState();
@@ -69,6 +65,26 @@ export default function Game() {
       setIsSpellReplaceModalOpen(true);
     }
   }, [gameState?.player.spellToReplace]);
+
+  useEffect(() => {
+    // Fetch leaderboard on component mount
+    const fetchLeaderboard = async () => {
+      try {
+        const response = await fetch('/api/leaderboard');
+        const data = await response.json();
+        if (data.error) {
+          setLeaderboardError(data.error);
+        } else {
+          setLeaderboard(data.entries);
+        }
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        setLeaderboardError('Failed to fetch leaderboard');
+      }
+    };
+
+    fetchLeaderboard();
+  }, []);
 
   const getUpdatedGameLog = (prev: GameState | null) => {
     if (!prev || prev.isGameOver) {
@@ -142,8 +158,13 @@ export default function Game() {
             if (effect.target === 'monster' && effect.type === 'HP' && updatedGameState.monster) {
               updatedGameState.monster.health += effect.value;
             }
-            if (effect.target === 'player' && effect.type === 'Mana' && updatedGameState.player) {
-              updatedGameState.player.mana += effect.value;
+            if (effect.target === 'player') {
+              if (effect.type === 'Mana') {
+                updatedGameState.player.mana += effect.value;
+              }
+              if (effect.type === 'HP') {
+                updatedGameState.player.health += effect.value;
+              }
             }
           });
         }
@@ -194,6 +215,7 @@ export default function Game() {
     }
     setGameState(newGameState);
     setGameStarted(false);
+    setHasSubmittedScore(false); // Reset the submission state when restarting
   };
 
   const toggleModal = () => {
@@ -328,22 +350,36 @@ export default function Game() {
     setGameState(Object.assign(new GameState(), gameState)); // Preserve class methods
   };
 
-  const handleLeaderboardSubmit = () => {
+  const handleLeaderboardSubmit = async () => {
     if (!playerName.trim()) return;
     
-    const newEntry = {
-      name: playerName.trim(),
-      level: gameState?.player.level || 1
-    };
-    
-    const updatedLeaderboard = [...leaderboard, newEntry]
-      .sort((a, b) => b.level - a.level)
-      .slice(0, 10); // Keep top 10
-    
-    setLeaderboard(updatedLeaderboard);
-    localStorage.setItem('leaderboard', JSON.stringify(updatedLeaderboard));
-    setShowLeaderboardModal(false);
-    setPlayerName('');
+    try {
+      const response = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: playerName.trim(),
+          level: gameState?.player.level || 1,
+          updateHighestOnly: true
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        setLeaderboardError(data.error);
+      } else {
+        setLeaderboard(data.entries);
+        setPlayerName('');
+        setLeaderboardError('');
+        setHasSubmittedScore(true);
+      }
+    } catch (error) {
+      console.error('Error submitting score:', error);
+      setLeaderboardError('Failed to submit score');
+    }
   };
 
   const isLevelUpMessage = (message: string) => {
@@ -428,11 +464,11 @@ export default function Game() {
       </header>
 
       {/* Main Container */}
-      <main className="flex-grow w-full max-w-5xl flex flex-col items-center p-2 overflow-auto sm:overflow-none sm:p-4 pb-20 sm:pb-4">
+      <main className="flex-grow w-full max-w-7xl flex flex-col items-center p-2 overflow-auto sm:overflow-none sm:p-4 pb-20 sm:pb-4">
         {/* Player & Game Info */}
-        <section className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
+        <section className="w-full grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
           {/* Player Stats Card */}
-          <div className={`bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6`}>
+          <div className="bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6">
             <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">Player Stats</h2>
             <div className="flex flex-col items-center space-y-3 sm:space-y-4">
               <div className={`text-base sm:text-lg`}>
@@ -552,12 +588,6 @@ export default function Game() {
                 }`}>
                   <h2 className="text-base font-extrabold text-red-200 mb-2">Game Over</h2>
                   <button
-                    onClick={() => setShowLeaderboardModal(true)}
-                    className="bg-pink-500 hover:bg-pink-600 transition-colors text-white font-bold py-2 px-4 rounded mb-2"
-                  >
-                    Add to Leaderboard
-                  </button>
-                  <button
                     onClick={handleRestart}
                     className="bg-gray-500 hover:bg-gray-600 transition-colors text-white font-bold py-2 px-4 rounded"
                   >
@@ -572,6 +602,43 @@ export default function Game() {
                 >
                   {gameStarted ? 'Continue' : 'Start Game'}
                 </button>
+              )}
+            </div>
+          </div>
+
+          {/* Leaderboard Card */}
+          <div className="bg-pink-800/50 shadow-md rounded-lg p-3 sm:p-6">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">Leaderboard</h2>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {leaderboard.map((entry, index) => (
+                  <div key={index} className="flex justify-between items-center bg-pink-900/50 p-2 rounded text-white">
+                    <span>{entry.name}</span>
+                    <span className="font-bold">Level {entry.level}</span>
+                  </div>
+                ))}
+              </div>
+              {gameState.isGameOver && !hasSubmittedScore && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full p-2 border rounded text-black"
+                    maxLength={20}
+                  />
+                  <button
+                    onClick={handleLeaderboardSubmit}
+                    className="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded"
+                    disabled={!playerName.trim()}
+                  >
+                    Submit Score
+                  </button>
+                  {leaderboardError && (
+                    <p className="text-red-500 text-sm mt-2">{leaderboardError}</p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -763,41 +830,6 @@ export default function Game() {
         >
           Test Version Update
         </button>
-      )}
-
-      {showLeaderboardModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Leaderboard</h2>
-            <div className="mb-4">
-              <input
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Enter your name"
-                className="w-full p-2 border rounded mb-2"
-                maxLength={20}
-              />
-              <button
-                onClick={handleLeaderboardSubmit}
-                className="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded"
-              >
-                Submit Score
-              </button>
-            </div>
-            <div className="mt-4">
-              <h3 className="font-bold mb-2">Top Players</h3>
-              <div className="space-y-2">
-                {leaderboard.map((entry, index) => (
-                  <div key={index} className="flex justify-between items-center bg-gray-100 p-2 rounded">
-                    <span>{entry.name}</span>
-                    <span className="font-bold">Level {entry.level}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
