@@ -208,17 +208,43 @@ export default function Game() {
   };
 
   const getEmojiClass = (entry: LogEntry) => {
+    console.log('Message:', entry.message);
+    
     // Spell casts
-    if (entry.message.includes('casts Fireball') || entry.message.includes('fiery explosion')) return 'emoji-float emoji-fireball';
-    if (entry.message.includes('Donut') || entry.message.includes('donut')) return 'emoji-float emoji-donut';
-    if (entry.message.includes('Freeze') || entry.message.includes('frozen')) return 'emoji-float emoji-freeze';
-    if (entry.message.includes('Healing Light') || entry.message.includes('warm light')) return 'emoji-float emoji-heal';
-    if (entry.message.includes('uses fists')) return 'emoji-float emoji-fist';
+    if (entry.message.includes('casts Fireball') || entry.message.includes('fiery explosion')) {
+      console.log('Matched: fireball');
+      return 'emoji-float emoji-fireball';
+    }
+    if (entry.message.includes('Donut') || entry.message.includes('donut')) {
+      console.log('Matched: donut');
+      return 'emoji-float emoji-donut';
+    }
+    if (entry.message.includes('Freeze') || entry.message.includes('frozen')) {
+      console.log('Matched: freeze');
+      return 'emoji-float emoji-freeze';
+    }
+    if (entry.message.includes('Healing Light') || entry.message.includes('warm light')) {
+      console.log('Matched: heal');
+      return 'emoji-float emoji-heal';
+    }
+    if (entry.message.toLowerCase().includes('fist')) {
+      console.log('Matched: fist');
+      return 'emoji-float emoji-fist';
+    }
     
     // Monster events
-    if (entry.message.includes('A wild')) return 'emoji-float emoji-monster';
-    if (entry.message.includes('strikes back') || entry.message.includes('damage')) return 'emoji-float emoji-damage';
-    if (entry.message.includes('has been defeated')) return 'emoji-float emoji-damage';
+    if (entry.message.includes('A wild')) {
+      console.log('Matched: monster');
+      return 'emoji-float emoji-monster';
+    }
+    if (entry.message.includes('strikes back') || entry.message.includes('damage')) {
+      console.log('Matched: damage');
+      return 'emoji-float emoji-damage';
+    }
+    if (entry.message.includes('has been defeated')) {
+      console.log('Matched: defeated');
+      return 'emoji-float emoji-damage';
+    }
     
     // Random events
     if (entry.message.includes('shiny coin')) return 'emoji-float emoji-coin';
@@ -242,6 +268,7 @@ export default function Game() {
     if (entry.effect?.some(e => e.type === 'HP' && e.value > 0)) return 'emoji-float emoji-heal';
     if (entry.effect?.some(e => e.type === 'HP' && e.value < 0)) return 'emoji-float emoji-damage';
     
+    console.log('No emoji match found');
     return '';
   };
 
@@ -315,6 +342,73 @@ export default function Game() {
     setPlayerName('');
   };
 
+  const isLevelUpMessage = (message: string) => {
+    return message.includes('Level up!') || message.includes('defeated a boss');
+  };
+
+  const renderLogEntry = (entry: LogEntry, extraClasses: string = '', showExpandButton: boolean = false, turnEntries?: LogEntry[]) => {
+    const isLevelUp = isLevelUpMessage(entry.message);
+    const baseClasses = `text-sm p-3 rounded ${extraClasses} ${getAnimationClass(entry)}`;
+    
+    const content = (
+      <>
+        {isLevelUp && (
+          <>
+            <div className="level-up-particles">
+              <div className="level-up-particle"></div>
+              <div className="level-up-particle"></div>
+              <div className="level-up-particle"></div>
+              <div className="level-up-particle"></div>
+              <div className="level-up-particle"></div>
+            </div>
+            <div className="level-up-text">LEVEL UP!</div>
+          </>
+        )}
+        <span className={getEmojiClass(entry)}>
+          {entry.message}
+        </span>
+        {entry.effect?.map((effect, effectIndex) => (
+          <span
+            key={`effect-${effectIndex}`}
+            className={`text-xs ml-2 ${
+              effect?.type.includes('HP')
+                ? effect?.value >= 0
+                  ? 'text-green-300'
+                  : 'text-red-300'
+                : effect?.type.toLowerCase().includes('mana')
+                ? 'text-blue-300'
+                : 'text-yellow-300'
+            }`}
+          >
+            {`${effect?.value >= 0 ? '+' : ''}${effect?.value} ${effect?.type}`}
+          </span>
+        ))}
+        {showExpandButton && turnEntries && turnEntries.length > 1 && (
+          <button
+            className="text-xs ml-2 transition-transform duration-300 hover:bg-white/10 rounded-full p-1"
+            onClick={() => handleEntryClick(turnEntries)}
+          >
+            <span>▼</span>
+          </button>
+        )}
+      </>
+    );
+
+    if (isLevelUp) {
+      return (
+        <div className={`${baseClasses} level-up-container level-up-glow`}>
+          {content}
+        </div>
+      );
+    }
+
+    return (
+      <div className={baseClasses}>
+        {content}
+      </div>
+    );
+  };
+
   if (!gameState) {
     return <div>Loading...</div>;
   }
@@ -374,34 +468,12 @@ export default function Game() {
                 <h2 className="text-lg sm:text-xl font-bold mb-3">Combat Encounter</h2>
                 <ul className="text-white/90 overflow-y-auto max-h-[180px] space-y-2">
                   {currentEntries?.length && currentEntries[currentEntries.length - 1] && (
-                    <li
-                      className={`text-sm bg-pink-900/50 p-3 rounded ${
-                        currentEntries[currentEntries.length - 1].message.includes('A wild') ? 'shake' : ''
-                      } ${
-                        currentEntries[currentEntries.length - 1].message.includes('spell') ? 'glow' : ''
-                      }`}
-                    >
-                      <span className={getEmojiClass(currentEntries[currentEntries.length - 1])}>
-                        {currentEntries[currentEntries.length - 1].message}
-                      </span>
-                      {currentEntries[currentEntries.length - 1].effect
-                        ?.filter(effect => effect.target !== 'monster')
-                        .map((effect, effectIndex) => (
-                          <span
-                            key={`effectIndex3-${effectIndex}`}
-                            className={`text-xs ml-2 ${
-                              effect?.type.includes('HP')
-                                ? effect?.value >= 0
-                                  ? 'text-green-300'
-                                  : 'text-red-300'
-                                : effect?.type.toLowerCase().includes('mana')
-                                ? 'text-blue-300'
-                                : 'text-yellow-300'
-                            }`}
-                          >
-                            {`${effect?.value >= 0 ? '+' : ''}${effect?.value} ${effect?.type}`}
-                          </span>
-                        ))}
+                    <li className={`${
+                      currentEntries[currentEntries.length - 1].message.includes('A wild') ? 'shake' : ''
+                    } ${
+                      currentEntries[currentEntries.length - 1].message.includes('spell') ? 'glow' : ''
+                    }`}>
+                      {renderLogEntry(currentEntries[currentEntries.length - 1], 'bg-pink-900/50')}
                     </li>
                   )}
                 </ul>
@@ -438,10 +510,9 @@ export default function Game() {
                   .map((turnEntries: LogEntry[], turnIndex) => {
                     const lastEntry = turnEntries[turnEntries.length - 1];
                     return (
-                      <li key={`turnIndex1-${turnIndex}`} className="mb-3">
+                      <li key={`turn-${turnIndex}`} className="mb-3">
                         <div className="font-bold text-sm sm:text-base">
-                          Turn{' '}
-                          {gameState.gameLog.length > 3
+                          Turn {gameState.gameLog.length > 3
                             ? gameState.gameLog.length - (2 - turnIndex)
                             : turnIndex + 1}
                         </div>
@@ -449,41 +520,8 @@ export default function Game() {
                         (gameState.gameLog.length > 3 ? turnIndex !== 2 : turnIndex !== gameState.gameLog.length - 1) ? (
                           <ul>
                             {Array.isArray(turnEntries) && lastEntry?.message ? (
-                              <li
-                                className={`text-sm bg-pink-900/50 p-3 rounded ${
-                                  turnIndex === 2 ? 'highlight' : ''
-                                } ${turnIndex === 2 ? getAnimationClass(lastEntry) : ''}`}
-                              >
-                                <span className={getEmojiClass(lastEntry)}>
-                                  {lastEntry.message}
-                                </span>
-                                {lastEntry.effect && (
-                                  <span
-                                    className={`text-xs ml-2 ${
-                                      lastEntry.effect[0]?.type.includes('HP')
-                                        ? lastEntry.effect[0]?.value >= 0
-                                          ? 'text-green-300'
-                                          : 'text-red-300'
-                                        : lastEntry.effect[0]?.type
-                                            .toLowerCase()
-                                            .includes('mana')
-                                        ? 'text-blue-300'
-                                        : 'text-yellow-300'
-                                    }`}
-                                  >
-                                    {`${lastEntry.effect[0]?.value >= 0 ? '+' : ''}${
-                                      lastEntry.effect[0]?.value
-                                    } ${lastEntry.effect[0]?.type}`}
-                                  </span>
-                                )}
-                                {turnEntries.length > 1 && (
-                                  <button
-                                    className="text-xs ml-2 transition-transform duration-300 hover:bg-white/10 rounded-full p-1"
-                                    onClick={() => handleEntryClick(turnEntries)}
-                                  >
-                                    <span>▼</span>
-                                  </button>
-                                )}
+                              <li className={turnIndex === 2 ? 'highlight' : ''}>
+                                {renderLogEntry(lastEntry, 'bg-pink-900/50', true, turnEntries)}
                               </li>
                             ) : null}
                           </ul>
@@ -552,25 +590,7 @@ export default function Game() {
                             key={`entryIndex1-${entryIndex}`}
                             className={`text-sm bg-gray-100 p-3 rounded mt-1`}
                           >
-                            <span className={getEmojiClass(entry)}>
-                              {entry.message}
-                            </span>
-                            {entry.effect?.map((effect, effectIndex) => (
-                              <span
-                                key={`effectIndex1-${entryIndex}-${effectIndex}`}
-                                className={`text-xs ml-2 ${
-                                  effect?.type.includes('HP')
-                                    ? effect?.value >= 0
-                                      ? 'text-green-600'
-                                      : 'text-red-600'
-                                    : effect?.type.toLowerCase().includes('mana')
-                                    ? 'text-blue-600'
-                                    : 'text-yellow-600'
-                                }`}
-                              >
-                                {`${effect?.value >= 0 ? '+' : ''}${effect?.value} ${effect?.type}`}
-                              </span>
-                            ))}
+                            {renderLogEntry(entry)}
                           </li>
                         ))
                       : null}
@@ -602,27 +622,7 @@ export default function Game() {
                       entry.message.includes('A wild') ? 'shake' : ''
                     } ${entry.message.includes('spell') ? 'glow' : ''}`}
                   >
-                    <span className={getEmojiClass(entry)}>
-                      {entry.message}
-                    </span>
-                    {entry.effect
-                      ?.filter(effect => effect.target !== 'monster')
-                      .map((effect, effectIndex) => (
-                        <span
-                          key={`effectIndex2-${effectIndex}`}
-                          className={`text-xs ml-2 ${
-                            effect?.type.includes('HP')
-                              ? effect?.value >= 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                              : effect?.type.toLowerCase().includes('mana')
-                              ? 'text-blue-600'
-                              : 'text-yellow-600'
-                          }`}
-                        >
-                          {`${effect?.value >= 0 ? '+' : ''}${effect?.value} ${effect?.type}`}
-                        </span>
-                      ))}
+                    {renderLogEntry(entry)}
                   </li>
                 ))}
             </ul>

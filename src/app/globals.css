@@ -206,15 +206,123 @@ body {
 .emoji-xp::after { content: '✨'; }
 
 @keyframes levelUp {
-  0% { transform: scale(1); filter: brightness(1); }
-  50% { transform: scale(1.2); filter: brightness(1.5); }
-  100% { transform: scale(1); filter: brightness(1); }
+  0% { 
+    transform: scale(1);
+    filter: brightness(1);
+    background: transparent;
+  }
+  10% {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+    background: rgba(255, 215, 0, 0.1);
+  }
+  20% {
+    transform: scale(1.1);
+    filter: brightness(1.5);
+    background: rgba(255, 215, 0, 0.2);
+  }
+  50% {
+    transform: scale(1.2);
+    filter: brightness(2);
+    background: rgba(255, 215, 0, 0.3);
+  }
+  80% {
+    transform: scale(1.1);
+    filter: brightness(1.5);
+    background: rgba(255, 215, 0, 0.2);
+  }
+  90% {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+    background: rgba(255, 215, 0, 0.1);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+    background: transparent;
+  }
 }
 
 @keyframes levelUpGlow {
-  0% { box-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700; }
-  50% { box-shadow: 0 0 20px #ffd700, 0 0 30px #ffd700; }
-  100% { box-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700; }
+  0% {
+    box-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700;
+  }
+  50% {
+    box-shadow: 0 0 20px #ffd700, 0 0 30px #ffd700, 0 0 40px #ffd700;
+  }
+  100% {
+    box-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700;
+  }
+}
+
+@keyframes levelUpParticle {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100px) translateX(var(--particle-x)) scale(0);
+    opacity: 0;
+  }
+}
+
+.level-up-container {
+  position: relative;
+  animation: levelUp 1.5s ease-in-out;
+  border-radius: 0.5rem;
+}
+
+.level-up-glow {
+  animation: levelUpGlow 1.5s ease-in-out;
+  border-radius: 0.5rem;
+}
+
+.level-up-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.level-up-particle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ffd700;
+  border-radius: 50%;
+  animation: levelUpParticle 1s ease-out forwards;
+}
+
+.level-up-particle:nth-child(1) { --particle-x: -50px; animation-delay: 0.1s; }
+.level-up-particle:nth-child(2) { --particle-x: 50px; animation-delay: 0.2s; }
+.level-up-particle:nth-child(3) { --particle-x: -30px; animation-delay: 0.3s; }
+.level-up-particle:nth-child(4) { --particle-x: 30px; animation-delay: 0.4s; }
+.level-up-particle:nth-child(5) { --particle-x: 0px; animation-delay: 0.5s; }
+
+.level-up-text {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 1.2em;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  animation: statIncrease 2s ease-out forwards;
+  white-space: nowrap;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .level-up-container {
+    background: rgba(255, 215, 0, 0.05);
+  }
+  
+  .level-up-particle {
+    background: #ffe44d;
+  }
 }
 
 @keyframes statIncrease {
