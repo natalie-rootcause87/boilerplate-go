@@ -71,11 +71,23 @@ export default function Game() {
     const fetchLeaderboard = async () => {
       try {
         const response = await fetch('/api/leaderboard');
-        const data = await response.json();
-        if (data.error) {
-          setLeaderboardError(data.error);
-        } else {
-          setLeaderboard(data.entries);
+        const text = await response.text(); // Get raw response text first
+        try {
+          const data = JSON.parse(text);
+          if (data.error) {
+            setLeaderboardError(data.error);
+          } else {
+            setLeaderboard(data.entries);
+          }
+        } catch (parseError) {
+          console.error('Error parsing leaderboard response:', {
+            parseError,
+            text,
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries())
+          });
+          setLeaderboardError('Failed to parse leaderboard data');
         }
       } catch (error) {
         console.error('Error fetching leaderboard:', error);
