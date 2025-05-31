@@ -1,10 +1,18 @@
 import { MongoClient } from 'mongodb';
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Please add your MongoDB URI to .env.local');
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('MongoDB connection error:', {
+    NODE_ENV: process.env.NODE_ENV,
+    hasMongoUri: !!process.env.MONGODB_URI,
+    envKeys: Object.keys(process.env).filter(key => key.includes('MONGO'))
+  });
+  throw new Error(
+    'MongoDB URI is not defined. Please ensure MONGODB_URI environment variable is set in AWS Amplify environment variables.'
+  );
 }
 
-const uri = process.env.MONGODB_URI;
 const options = {};
 
 let client;
@@ -18,14 +26,20 @@ if (process.env.NODE_ENV === 'development') {
   };
 
   if (!globalWithMongo._mongoClientPromise) {
-    client = new MongoClient(uri, options);
+    client = new MongoClient(MONGODB_URI, options);
     globalWithMongo._mongoClientPromise = client.connect();
   }
   clientPromise = globalWithMongo._mongoClientPromise;
 } else {
   // In production mode, it's best to not use a global variable.
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+  try {
+    client = new MongoClient(MONGODB_URI, options);
+    clientPromise = client.connect();
+    console.log('MongoDB client initialized in production mode');
+  } catch (error) {
+    console.error('Error initializing MongoDB client:', error);
+    throw error;
+  }
 }
 
 // Export a module-scoped MongoClient promise. By doing this in a

@@ -10,17 +10,27 @@ export default async function handler(
     // Try connecting to MongoDB with more detailed error logging
     let client;
     try {
+      console.log('Attempting MongoDB connection...');
+      if (!process.env.MONGODB_URI) {
+        throw new Error('MONGODB_URI is not defined in environment variables');
+      }
+      console.log('MongoDB URI exists, attempting connection...');
       client = await clientPromise;
+      console.log('MongoDB connection successful');
     } catch (error) {
       const mongoError = error as Error;
       console.error('MongoDB connection error:', {
         error: mongoError.toString(),
         message: mongoError.message,
-        stack: mongoError.stack
+        stack: mongoError.stack,
+        envVars: {
+          hasMongoUri: !!process.env.MONGODB_URI,
+          nodeEnv: process.env.NODE_ENV
+        }
       });
       return res.status(500).json({ 
         entries: [], 
-        error: 'Failed to connect to database. Please try again later.' 
+        error: `Database connection failed: ${mongoError.message}` 
       });
     }
 
