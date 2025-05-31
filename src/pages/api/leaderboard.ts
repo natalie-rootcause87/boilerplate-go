@@ -7,19 +7,47 @@ export default async function handler(
   res: NextApiResponse<LeaderboardResponse>
 ) {
   try {
-    const client = await clientPromise;
+    // Try connecting to MongoDB with more detailed error logging
+    let client;
+    try {
+      client = await clientPromise;
+    } catch (error) {
+      const mongoError = error as Error;
+      console.error('MongoDB connection error:', {
+        error: mongoError.toString(),
+        message: mongoError.message,
+        stack: mongoError.stack
+      });
+      return res.status(500).json({ 
+        entries: [], 
+        error: 'Failed to connect to database. Please try again later.' 
+      });
+    }
+
     const db = client.db('donut-go');
     const collection = db.collection<LeaderboardEntry>('leaderboard');
 
     if (req.method === 'GET') {
-      // Get top 10 scores
-      const entries = await collection
-        .find({})
-        .sort({ level: -1, createdAt: -1 })
-        .limit(10)
-        .toArray();
+      try {
+        const entries = await collection
+          .find({})
+          .sort({ level: -1, createdAt: -1 })
+          .limit(10)
+          .toArray();
 
-      return res.status(200).json({ entries });
+        return res.status(200).json({ entries });
+      } catch (error) {
+        const mongoError = error as Error;
+        console.error('MongoDB query error:', {
+          error: mongoError.toString(),
+          method: 'GET',
+          operation: 'find'
+        });
+        return res.status(500).json({ 
+          entries: [], 
+          error: 'Failed to fetch leaderboard. Please try again later.' 
+        });
+      }
     } else if (req.method === 'POST') {
       const { name, level, updateHighestOnly } = req.body;
 
@@ -38,40 +66,63 @@ export default async function handler(
         });
       }
 
-      // Check for existing entry with the same name
-      const existingEntry = await collection.findOne({ name: name.trim() });
-      
-      if (existingEntry && updateHighestOnly) {
-        // Only update if new level is higher
-        if (level > existingEntry.level) {
-          await collection.updateOne(
-            { name: name.trim() },
-            { $set: { level, createdAt: new Date() } }
-          );
+      try {
+        // Check for existing entry with the same name
+        const existingEntry = await collection.findOne({ name: name.trim() });
+        
+        if (existingEntry && updateHighestOnly) {
+          // Only update if new level is higher
+          if (level > existingEntry.level) {
+            await collection.updateOne(
+              { name: name.trim() },
+              { $set: { level, createdAt: new Date() } }
+            );
+          }
+        } else {
+          // Insert new entry
+          const newEntry: LeaderboardEntry = {
+            name: name.trim(),
+            level,
+            createdAt: new Date()
+          };
+          await collection.insertOne(newEntry);
         }
-      } else {
-        // Insert new entry
-        const newEntry: LeaderboardEntry = {
+
+        // Get updated top 10
+        const entries = await collection
+          .find({})
+          .sort({ level: -1, createdAt: -1 })
+          .limit(10)
+          .toArray();
+
+        return res.status(200).json({ entries });
+      } catch (error) {
+        const mongoError = error as Error;
+        console.error('MongoDB operation error:', {
+          error: mongoError.toString(),
+          method: 'POST',
           name: name.trim(),
-          level,
-          createdAt: new Date()
-        };
-        await collection.insertOne(newEntry);
+          level
+        });
+        return res.status(500).json({ 
+          entries: [], 
+          error: 'Failed to update leaderboard. Please try again later.' 
+        });
       }
-
-      // Get updated top 10
-      const entries = await collection
-        .find({})
-        .sort({ level: -1, createdAt: -1 })
-        .limit(10)
-        .toArray();
-
-      return res.status(200).json({ entries });
     }
 
     return res.status(405).json({ entries: [], error: 'Method not allowed' });
   } catch (error) {
-    console.error('Database error:', error);
-    return res.status(500).json({ entries: [], error: 'Internal server error' });
+    const serverError = error as Error;
+    console.error('Unexpected error in leaderboard API:', {
+      error: serverError.toString(),
+      message: serverError.message,
+      stack: serverError.stack,
+      method: req.method
+    });
+    return res.status(500).json({ 
+      entries: [], 
+      error: 'An unexpected error occurred. Please try again later.' 
+    });
   }
 } 
