@@ -1,12 +1,17 @@
 import { MongoClient } from 'mongodb';
+import getConfig from 'next/config';
 
-const MONGODB_URI = process.env.MONGODB_URI;
+// Try multiple ways to get the MongoDB URI
+const { serverRuntimeConfig } = getConfig() || {};
+const MONGODB_URI = process.env.MONGODB_URI || serverRuntimeConfig?.MONGODB_URI;
 
 if (!MONGODB_URI) {
   console.error('MongoDB connection error:', {
     NODE_ENV: process.env.NODE_ENV,
     hasMongoUri: !!process.env.MONGODB_URI,
-    envKeys: Object.keys(process.env).filter(key => key.includes('MONGO'))
+    hasServerRuntimeUri: !!serverRuntimeConfig?.MONGODB_URI,
+    envKeys: Object.keys(process.env).filter(key => key.includes('MONGO')),
+    allEnvKeys: Object.keys(process.env)
   });
   throw new Error(
     'MongoDB URI is not defined. Please ensure MONGODB_URI environment variable is set in AWS Amplify environment variables.'
