@@ -1,3 +1,5 @@
+import { SPECIAL_ITEMS, Item } from './Items';
+
 export type Spell = { name: string; level: number };
 
 export default class Player {
@@ -12,6 +14,7 @@ export default class Player {
   spellToReplace?: string;
   pendingSpell?: string;
   pendingSpellLevel: number;
+  items: Item[];
 
   constructor() {
     this.health = this.maxHealth = 100;
@@ -22,7 +25,18 @@ export default class Player {
     this.xpForNextLevel = this.calculateXpForNextLevel(this.level);
     this.spells = [];
     this.pendingSpellLevel = 1;
+    this.items = this.loadPersistentItems();
     this.logState('Initialized');
+  }
+
+  private loadPersistentItems(): Item[] {
+    if (typeof window !== 'undefined') {
+      const highestLevel = parseInt(localStorage.getItem('highestLevel') || '1');
+      if (highestLevel >= 3) {
+        return [SPECIAL_ITEMS.donut_crown];
+      }
+    }
+    return [];
   }
 
   // --- XP & Leveling ---
@@ -50,6 +64,20 @@ export default class Player {
     this.maxMana += 5;
     this.mana = this.maxMana;
     this.log(`[Level Up] ${oldLevel} → ${this.level} | XP: ${this.xp}/${this.xpForNextLevel}`);
+
+    // Check for level 3 reward and update highest level
+    if (typeof window !== 'undefined') {
+      const currentHighestLevel = parseInt(localStorage.getItem('highestLevel') || '1');
+      if (this.level > currentHighestLevel) {
+        localStorage.setItem('highestLevel', this.level.toString());
+      }
+      
+      // Give level 3 reward if just reached level 3
+      if (this.level === 3 && currentHighestLevel < 3) {
+        this.items.push(SPECIAL_ITEMS.donut_crown);
+        this.log(`[Item] Received the ${SPECIAL_ITEMS.donut_crown.name}! ${SPECIAL_ITEMS.donut_crown.description}`);
+      }
+    }
   }
 
   private calculateXpForNextLevel(level: number): number {
@@ -59,6 +87,10 @@ export default class Player {
   // --- Health & Mana ---
 
   gainMana(amount: number) {
+    // Apply mana regeneration bonus from items
+    if (this.items.some(item => item.effect === 'mana_regen')) {
+      amount += 2; // Donut Crown effect
+    }
     this.mana = Math.min(this.maxMana, this.mana + amount);
     this.log(`[Mana] +${amount} → ${this.mana}/${this.maxMana}`);
   }
@@ -123,11 +155,18 @@ export default class Player {
   handleSpellChoice(chosenSpell?: string): string {
     if (!this.pendingSpell) return 'no_pending_spell';
     let result: string;
-    if (!chosenSpell) {
+    
+    // If we have space for more spells, learn it directly
+    if (this.spells.length < this.level) {
+      result = this.upgradeSpell(this.pendingSpell);
+    } else if (!chosenSpell) {
+      // No space and no spell chosen to replace
       result = 'kept_current';
     } else {
+      // Replace chosen spell with new spell
       result = this.upgradeSpell(this.pendingSpell, chosenSpell);
     }
+    
     this.pendingSpell = undefined;
     this.log(`[Spell] Choice handled: ${result}`);
     return result;
@@ -139,11 +178,11 @@ export default class Player {
 
   // --- Logging ---
 
-  private log(msg: string) {
-    console.log(`[Player] ${msg}`);
+  private log(message: string) {
+    console.log(`[Player] ${message}`);
   }
 
   private logState(context: string) {
-    console.log(`[Player] ${context} | Level: ${this.level}, XP: ${this.xp}/${this.xpForNextLevel}, HP: ${this.health}/${this.maxHealth}, Mana: ${this.mana}/${this.maxMana}, Spells: ${this.spells.length}`);
+    console.log(`[Player] ${context} | Level: ${this.level}, XP: ${this.xp}/${this.xpForNextLevel}, HP: ${this.health}/${this.maxHealth}, Mana: ${this.mana}/${this.maxMana}, Spells: ${this.spells.length}, Items: ${this.items.length}`);
   }
 }

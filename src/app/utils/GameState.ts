@@ -86,21 +86,22 @@ export default class GameState {
   }
 
   resetGame() {
-    this.player = new Player();
-    this.gameLog = []; // Reset the game log without initializing a turn
+    const newPlayer = new Player(); // This will load any persistent items
+    this.player = newPlayer;
+    this.monster = null;
+    this.gameLog = [];
     this.isGameOver = false;
-    this.unlockedSpells = []; // Reset unlocked spells
+    this.unlockedSpells = [];
+    this.lastActionType = null;
     
-    // Clear localStorage entries
+    // Clear localStorage entries except for highest level
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('gameLog');
-      localStorage.removeItem('unlockedSpells');
-      localStorage.removeItem('playerState');
+      const highestLevel = localStorage.getItem('highestLevel');
+      localStorage.clear();
+      if (highestLevel) {
+        localStorage.setItem('highestLevel', highestLevel);
+      }
     }
-    
-    this.saveGameLog(); // Save the cleared log
-    this.saveUnlockedSpells(); // Save the cleared spells
-    this.savePlayerState(); // Save the new player state
   }
 
   // Method to handle combat
@@ -172,6 +173,7 @@ export default class GameState {
         if (monster.name.toLowerCase().includes("donut")) {
           earnedDonutSpell = true;
         }
+        this.monster = null; // Clear the monster when defeated
         break; // Exit the combat loop
       }
 
@@ -224,6 +226,7 @@ export default class GameState {
       }
     } else if (turnCount >= maxTurns) {
       this.addLogEntry('Combat ended due to reaching the maximum number of turns.');
+      this.monster = null; // Clear monster if combat ends due to max turns
     }
   }
 
@@ -295,6 +298,7 @@ export default class GameState {
         earnedDonutSpell = true;
       }
       isCombatOver = true;
+      this.monster = null; // Clear the monster when defeated
     } else {
       // Monster's return strike - only if not frozen
       if (monster.frozenTurns > 0) {

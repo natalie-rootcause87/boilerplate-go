@@ -1,19 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import GameState, { PartialGameState, LogEntry } from '../utils/GameState';
+import GameState, { LogEntry } from '../utils/GameState';
 import EventManager from '../utils/EventManager';
 import Spell, { allSpells } from '../utils/Spell';
 import ProgressBar from './ProgressBar';
 import { useVersion } from '../contexts/VersionContext';
-import { LeaderboardEntry } from '../../types/leaderboard';
+import { useLeaderboard } from '../hooks/useLeaderboard';
+import { useGameState } from '../hooks/useGameState';
+import { Item } from '../utils/Items';
 
 export default function Game() {
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const { gameState, updateGameState } = useGameState();
+  const { leaderboard, error: leaderboardError, submitScore } = useLeaderboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const actionInProgress = useRef(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [currentEntries, setCurrentEntries] = useState<LogEntry[]>([]);
   const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const logRef = useRef<HTMLUListElement | null>(null);
   const [isTurnPaused, setIsTurnPaused] = useState(false);
   const [isSpellReplaceModalOpen, setIsSpellReplaceModalOpen] = useState(false);
@@ -26,31 +30,7 @@ export default function Game() {
   });
   const [isSpellChoiceModalOpen, setIsSpellChoiceModalOpen] = useState(false);
   const [playerName, setPlayerName] = useState('');
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardError, setLeaderboardError] = useState<string>('');
   const [hasSubmittedScore, setHasSubmittedScore] = useState(false);
-
-  useEffect(() => {
-    const newGameState = new GameState();
-    newGameState.gameLog = []; // Clear the game log
-    if (newGameState.unlockedSpells.length > 0) {
-      const randomSpellName = newGameState.unlockedSpells[Math.floor(Math.random() * newGameState.unlockedSpells.length)];
-      newGameState.player.spells.push({ name: randomSpellName, level: 1 });
-    }
-    console.log('Initial GameState:', newGameState);
-    setGameState(newGameState);
-
-    // Example polling logic commented out:
-    // const intervalId = setInterval(async () => {
-    //   try {
-    //     const response = await axios.post('/api/activity');
-    //     setGameState(response.data.gameState);
-    //   } catch (error) {
-    //     console.error('Error fetching game state:', error);
-    //   }
-    // }, 5000);
-    // return () => clearInterval(intervalId);
-  }, []);
 
   useEffect(() => {
     if (logRef.current) {
@@ -66,57 +46,6 @@ export default function Game() {
     }
   }, [gameState?.player.spellToReplace]);
 
-  useEffect(() => {
-    // Fetch leaderboard on component mount
-    const fetchLeaderboard = async () => {
-      try {
-        const response = await fetch('/api/leaderboard');
-        const text = await response.text(); // Get raw response text first
-        try {
-          const data = JSON.parse(text);
-          if (data.error) {
-            setLeaderboardError(data.error);
-          } else {
-            setLeaderboard(data.entries);
-          }
-        } catch (parseError) {
-          console.error('Error parsing leaderboard response:', {
-            parseError,
-            text,
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers.entries())
-          });
-          setLeaderboardError('Failed to parse leaderboard data');
-        }
-      } catch (error) {
-        console.error('Error fetching leaderboard:', error);
-        setLeaderboardError('Failed to fetch leaderboard');
-      }
-    };
-
-    fetchLeaderboard();
-  }, []);
-
-  const getUpdatedGameLog = (prev: GameState | null) => {
-    if (!prev || prev.isGameOver) {
-      console.log('Game is over, no action taken');
-      actionInProgress.current = false;
-      return prev?.gameLog;
-    }
-    console.log('Triggering log event for a new turn');
-    const updatedState = EventManager.triggerEvent(prev) as GameState | PartialGameState;
-    console.log('Updated GameState:', updatedState.gameLog.length, updatedState);
-    if (updatedState instanceof GameState) {
-      actionInProgress.current = false;
-      return updatedState.gameLog;
-    } else {
-      const newState = GameState.fromPartial(updatedState);
-      actionInProgress.current = false;
-      return newState.gameLog;
-    }
-  };
-
   const pauseTurn = () => {
     console.log('Turn paused');
     setIsTurnPaused(true);
@@ -128,92 +57,143 @@ export default function Game() {
   };
 
   const handleAction = () => {
-    if (actionInProgress.current) return;
+    console.log('handleAction called', { actionInProgress: actionInProgress.current, gameState: !!gameState });
+    if (actionInProgress.current || !gameState) return;
     actionInProgress.current = true;
 
-    if (!gameState) {
+    if (!gameStarted) {
+      console.log('Starting new game');
+      const newGameState = new GameState();
+      newGameState.resetGame();
+      console.log('New game state created:', newGameState);
+      
+      // Trigger first event immediately after game start
+      const result = EventManager.triggerEvent(newGameState);
+      console.log('Initial event result:', result);
+      
+      updateGameState.mutate(result);
+      setGameStarted(true);
+      
+      // Handle the initial event result
+      if (result.monster) {
+        console.log('Initial monster encounter detected');
+        pauseTurn();
+        setCurrentEntries([result.gameLog[result.gameLog.length - 1][0]]);
+        
+        // Show remaining entries with a short delay
+        const lastTurnEntries = result.gameLog[result.gameLog.length - 1];
+        let index = 1;
+        const intervalId = setInterval(() => {
+          if (index < lastTurnEntries.length) {
+            // Create a new state for this combat step
+            const currentState = Object.assign(new GameState(), result);
+            
+            // Update the current entries to show progress
+            setCurrentEntries(prevEntries => [...prevEntries, lastTurnEntries[index]]);
+            
+            // Update state based on effects
+            const entry = lastTurnEntries[index];
+            entry.effect?.forEach(effect => {
+              if (effect.target === 'monster' && effect.type === 'HP' && currentState.monster) {
+                currentState.monster.health += effect.value;
+              }
+              if (effect.target === 'player') {
+                if (effect.type === 'Mana') {
+                  currentState.player.mana += effect.value;
+                }
+                if (effect.type === 'HP') {
+                  currentState.player.health += effect.value;
+                }
+              }
+            });
+            
+            // Update the game state to reflect changes
+            updateGameState.mutate(currentState);
+            index++;
+          } else {
+            clearInterval(intervalId);
+            unpauseTurn();
+            if (result.player.pendingSpell) {
+              setIsSpellChoiceModalOpen(true);
+            }
+          }
+        }, 1000);
+      } else {
+        console.log('Initial non-monster event');
+        setCurrentEntries([]);
+        updateGameState.mutate(result);
+        // Show spell choice modal immediately if there's a pending spell
+        if (result.player.pendingSpell) {
+          setIsSpellChoiceModalOpen(true);
+        }
+      }
+      
       actionInProgress.current = false;
       return;
     }
 
-    if (!gameStarted) {
-      gameState.resetGame();
-      setGameStarted(true);
-    }
+    console.log('Creating updated game state');
+    // Create a new instance of GameState to preserve class methods
+    const updatedGameState = Object.assign(new GameState(), gameState);
+    console.log('Triggering event');
+    const result = EventManager.triggerEvent(updatedGameState);
+    console.log('Event result:', result);
 
-    const updatedGameLog = getUpdatedGameLog(gameState);
-    const updatedGameState = gameState;
-
-    if (updatedGameLog) updatedGameState.gameLog = updatedGameLog;
-
-    console.log('Continue button clicked');
-
-    const lastTurnEntries = updatedGameLog?.[updatedGameLog.length - 1];
-    if (Array.isArray(lastTurnEntries) && lastTurnEntries.some(entry => entry.message.includes('A wild'))) {
+    // Check if there's a monster encounter
+    if (result.monster) {
+      console.log('Monster encounter detected');
       pauseTurn();
-      // Initialize monster's health from the first entry
-      const monsterEntry = lastTurnEntries[0];
-      if (monsterEntry.message.includes('A wild') && updatedGameState.monster) {
-        updatedGameState.monster.health = updatedGameState.monster.maxHealth;
-      }
-      setCurrentEntries([lastTurnEntries[0]]); // Set the first entry immediately
-
+      setCurrentEntries([result.gameLog[result.gameLog.length - 1][0]]);
+      
       // Show remaining entries with a short delay
-      let index = 1; // Start from the second entry
+      const lastTurnEntries = result.gameLog[result.gameLog.length - 1];
+      let index = 1;
       const intervalId = setInterval(() => {
-        if (index > 1) {
-          setCurrentEntries(prevEntries => [...prevEntries, lastTurnEntries[index - 1]]);
+        if (index < lastTurnEntries.length) {
+          // Create a new state for this combat step
+          const currentState = Object.assign(new GameState(), result);
           
-          // Update monster health based on effects
-          const entry = lastTurnEntries[index - 1];
+          // Update the current entries to show progress
+          setCurrentEntries(prevEntries => [...prevEntries, lastTurnEntries[index]]);
+          
+          // Update state based on effects
+          const entry = lastTurnEntries[index];
           entry.effect?.forEach(effect => {
-            if (effect.target === 'monster' && effect.type === 'HP' && updatedGameState.monster) {
-              updatedGameState.monster.health += effect.value;
+            if (effect.target === 'monster' && effect.type === 'HP' && currentState.monster) {
+              currentState.monster.health += effect.value;
             }
             if (effect.target === 'player') {
               if (effect.type === 'Mana') {
-                updatedGameState.player.mana += effect.value;
+                currentState.player.mana += effect.value;
               }
               if (effect.type === 'HP') {
-                updatedGameState.player.health += effect.value;
+                currentState.player.health += effect.value;
               }
             }
           });
-        }
-
-        if (index < lastTurnEntries.length) {
-          setGameState(Object.assign(new GameState(), updatedGameState));
+          
+          // Update the game state to reflect changes
+          updateGameState.mutate(currentState);
           index++;
         } else {
           clearInterval(intervalId);
           unpauseTurn();
-          // Only show spell choice modal after combat is complete
-          if (updatedGameState.player.pendingSpell) {
+          if (result.player.pendingSpell) {
             setIsSpellChoiceModalOpen(true);
           }
         }
       }, 1000);
     } else {
+      console.log('Non-monster event');
       setCurrentEntries([]);
-      updatedGameState.monster = null;
-      if (!updatedGameLog) return;
-
-      const lastTurnLog = updatedGameLog[updatedGameLog.length - 1];
-      lastTurnLog?.forEach(() => {
-        setGameState(Object.assign(new GameState(), updatedGameState));
-      });
-
-      // Show spell choice modal for non-combat spell rewards
-      if (updatedGameState.player.pendingSpell) {
+      updateGameState.mutate(result);
+      // Show spell choice modal immediately if there's a pending spell
+      if (result.player.pendingSpell) {
         setIsSpellChoiceModalOpen(true);
       }
     }
-
-    setTimeout(() => {
-      if (logRef.current) {
-        logRef.current.scrollTop = logRef.current.scrollHeight;
-      }
-    }, 100);
+    
+    actionInProgress.current = false;
   };
 
   const handleRestart = () => {
@@ -225,7 +205,7 @@ export default function Game() {
       const randomSpellName = newGameState.unlockedSpells[Math.floor(Math.random() * newGameState.unlockedSpells.length)];
       newGameState.player.spells.push({ name: randomSpellName, level: 1 });
     }
-    setGameState(newGameState);
+    updateGameState.mutate(newGameState);
     setGameStarted(false);
     setHasSubmittedScore(false); // Reset the submission state when restarting
   };
@@ -359,38 +339,21 @@ export default function Game() {
     }
     
     setIsSpellChoiceModalOpen(false);
-    setGameState(Object.assign(new GameState(), gameState)); // Preserve class methods
+    updateGameState.mutate(Object.assign(new GameState(), gameState)); // Preserve class methods
   };
 
   const handleLeaderboardSubmit = async () => {
-    if (!playerName.trim()) return;
+    if (!gameState || !playerName || hasSubmittedScore) return;
     
     try {
-      const response = await fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: playerName.trim(),
-          level: gameState?.player.level || 1,
-          updateHighestOnly: true
-        }),
+      await submitScore.mutateAsync({
+        playerName,
+        score: gameState.player.level // Using player level as score
       });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        setLeaderboardError(data.error);
-      } else {
-        setLeaderboard(data.entries);
-        setPlayerName('');
-        setLeaderboardError('');
-        setHasSubmittedScore(true);
-      }
+      setHasSubmittedScore(true);
+      setIsModalOpen(false);
     } catch (error) {
       console.error('Error submitting score:', error);
-      setLeaderboardError('Failed to submit score');
     }
   };
 
@@ -512,31 +475,51 @@ export default function Game() {
                     : <span className="text-gray-300">None</span>}
                 </div>
               </div>
-            </div>
 
-            {/* Combat Encounter Display */}
-            {currentEntries?.length > 0 && gameState.monster && (
-              <div className="mt-4 p-2 rounded-lg">
-                <h2 className="text-lg sm:text-xl font-bold mb-3">Combat Encounter</h2>
-                <ul className="text-white/90 overflow-y-auto max-h-[180px] space-y-2">
-                  {currentEntries?.length && currentEntries[currentEntries.length - 1] && (
-                    <li className={`${
-                      currentEntries[currentEntries.length - 1].message.includes('A wild') ? 'shake' : ''
-                    } ${
-                      currentEntries[currentEntries.length - 1].message.includes('spell') ? 'glow' : ''
-                    }`}>
-                      {renderLogEntry(currentEntries[currentEntries.length - 1], 'bg-pink-900/50')}
-                    </li>
-                  )}
-                </ul>
-                <ProgressBar
-                  label="Monster"
-                  value={gameState.monster.health > 0 ? gameState.monster.health : 0}
-                  max={gameState.monster.maxHealth}
-                  color="bg-purple-400"
-                />
-              </div>
-            )}
+              {/* Items Display */}
+              {gameState.player.items.length > 0 && (
+                <div className="text-base sm:text-lg w-full mt-4">
+                  <span className="font-semibold">Special Items:</span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {gameState.player.items.map(item => (
+                      <button
+                        key={item.name}
+                        onClick={() => setSelectedItem(item)}
+                        className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 rounded-full text-sm flex items-center gap-2 transition-colors"
+                        title={`Click for details`}
+                      >
+                        <span>{item.icon}</span>
+                        <span>{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Combat Encounter Display */}
+              {gameState.monster && (
+                <div className="mt-4 p-2 rounded-lg w-full">
+                  <h2 className="text-lg sm:text-xl font-bold mb-3">Combat Encounter</h2>
+                  <ul className="text-white/90 overflow-y-auto max-h-[180px] space-y-2">
+                    {currentEntries?.length && currentEntries[currentEntries.length - 1] && (
+                      <li className={`${
+                        currentEntries[currentEntries.length - 1].message.includes('A wild') ? 'shake' : ''
+                      } ${
+                        currentEntries[currentEntries.length - 1].message.includes('spell') ? 'glow' : ''
+                      }`}>
+                        {renderLogEntry(currentEntries[currentEntries.length - 1], 'bg-pink-900/50')}
+                      </li>
+                    )}
+                  </ul>
+                  <ProgressBar
+                    label="Monster"
+                    value={gameState.monster.health > 0 ? gameState.monster.health : 0}
+                    max={gameState.monster.maxHealth}
+                    color="bg-purple-400"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Game Log Card */}
@@ -578,7 +561,15 @@ export default function Game() {
                             ) : null}
                           </ul>
                         ) : (
-                          'Combat encounter is live...'
+                          <>
+                            {/* Show initial monster encounter message */}
+                            {turnEntries[0] && turnEntries[0].message.includes('A wild') && (
+                              <div className="mb-2">
+                                {renderLogEntry(turnEntries[0], 'bg-pink-900/50')}
+                              </div>
+                            )}
+                            Combat encounter is live...
+                          </>
                         )}
                       </li>
                     );
@@ -623,7 +614,7 @@ export default function Game() {
             <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">Leaderboard</h2>
             <div className="space-y-4">
               <div className="space-y-2">
-                {leaderboard.map((entry, index) => (
+                {leaderboard && leaderboard.map((entry, index) => (
                   <div key={index} className="flex justify-between items-center bg-pink-900/50 p-2 rounded text-white">
                     <span>{entry.name}</span>
                     <span className="font-bold">Level {entry.level}</span>
@@ -819,10 +810,11 @@ export default function Game() {
             <div className="space-y-2 mb-6">
               <p className="font-bold">Changes in this version:</p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Added animated emojis for all game events! <span className="emoji-float emoji-level-up">✨</span></li>
-                <li>Fixed spell choice timing during combat</li>
-                <li>Improved combat animations and effects</li>
-                <li>Better visual feedback for all actions</li>
+                <li>Added detailed item tooltips - click the Donut Crown to see what it does! <span className="emoji-float emoji-level-up">👑</span></li>
+                <li>Fixed combat animations to show each action step-by-step</li>
+                <li>Improved monster state handling between encounters</li>
+                <li>Added proper spell learning UI for non-combat events</li>
+                <li>Fixed various UI glitches and state bugs</li>
               </ul>
             </div>
             <button
@@ -842,6 +834,32 @@ export default function Game() {
         >
           Test Version Update
         </button>
+      )}
+
+      {/* Item Details Modal */}
+      {selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white text-black p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">{selectedItem.icon}</span>
+              <h2 className="text-lg sm:text-xl font-bold">{selectedItem.name}</h2>
+            </div>
+            <div className="space-y-2">
+              <p>
+                <strong>Description:</strong> {selectedItem.description}
+              </p>
+              <p>
+                <strong>Effect:</strong> {selectedItem.effect === 'mana_regen' ? '+2 Mana regeneration per turn' : selectedItem.effect}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedItem(null)}
+              className="mt-6 bg-red-500 hover:bg-red-600 transition-colors text-white font-bold py-2 px-4 rounded w-full"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
