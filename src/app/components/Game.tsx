@@ -46,6 +46,80 @@ export default function Game() {
     }
   }, [gameState?.player.spellToReplace]);
 
+  const handleCombatSequence = (result: GameState) => {
+    console.log('Monster encounter detected');
+    pauseTurn();
+
+    const combatEntries = result.gameLog[result.gameLog.length - 1];
+
+    setCurrentEntries([combatEntries[0]]);
+
+    const preCombatState = Object.assign(new GameState(), JSON.parse(JSON.stringify(result)));
+    if (preCombatState.monster) {
+      preCombatState.monster.health = preCombatState.monster.maxHealth;
+    }
+
+    combatEntries.forEach(entry => {
+      if (!entry.effect) return;
+      entry.effect.forEach(effect => {
+        if (effect.target === 'player') {
+          if (effect.type === 'HP') {
+            preCombatState.player.health -= effect.value;
+          }
+          if (effect.type === 'Mana') {
+            preCombatState.player.mana -= effect.value;
+          }
+        }
+      });
+    });
+
+    let animationStepState = preCombatState;
+    updateGameState.mutate(animationStepState);
+
+    let currentIndex = 1;
+    const processCombatStep = () => {
+      if (currentIndex < combatEntries.length) {
+        setCurrentEntries([combatEntries[currentIndex]]);
+
+        const nextStepState = Object.assign(new GameState(), JSON.parse(JSON.stringify(animationStepState)));
+        const entry = combatEntries[currentIndex];
+
+        if (entry.effect) {
+          entry.effect.forEach(effect => {
+            if (effect.target === 'monster' && effect.type === 'HP' && nextStepState.monster) {
+              nextStepState.monster.health += effect.value;
+            }
+            if (effect.target === 'player') {
+              if (effect.type === 'Mana') {
+                nextStepState.player.mana += effect.value;
+              }
+              if (effect.type === 'HP') {
+                nextStepState.player.health += effect.value;
+              }
+            }
+          });
+        }
+
+        animationStepState = nextStepState;
+        updateGameState.mutate(nextStepState);
+
+        currentIndex++;
+        setTimeout(processCombatStep, 2000);
+      } else {
+        const finalState = Object.assign(new GameState(), result);
+        finalState.monster = null;
+        finalState.monsterEncountered = false;
+        updateGameState.mutate(finalState);
+        unpauseTurn();
+        if (result.player.pendingSpell) {
+          setIsSpellChoiceModalOpen(true);
+        }
+      }
+    };
+
+    setTimeout(processCombatStep, 2000);
+  };
+
   const pauseTurn = () => {
     console.log('Turn paused');
     setIsTurnPaused(true);
@@ -57,72 +131,25 @@ export default function Game() {
   };
 
   const handleAction = () => {
-    console.log('handleAction called', { actionInProgress: actionInProgress.current, gameState: !!gameState });
     if (actionInProgress.current || !gameState) return;
     actionInProgress.current = true;
 
     if (!gameStarted) {
-      console.log('Starting new game');
       const newGameState = new GameState();
       newGameState.resetGame();
-      console.log('New game state created:', newGameState);
       
-      // Trigger first event immediately after game start
       const result = EventManager.triggerEvent(newGameState);
-      console.log('Initial event result:', result);
       
-      updateGameState.mutate(result);
       setGameStarted(true);
       
-      // Handle the initial event result
-      if (result.monster) {
-        console.log('Initial monster encounter detected');
-        pauseTurn();
-        setCurrentEntries([result.gameLog[result.gameLog.length - 1][0]]);
-        
-        // Show remaining entries with a short delay
-        const lastTurnEntries = result.gameLog[result.gameLog.length - 1];
-        let index = 1;
-        const intervalId = setInterval(() => {
-          if (index < lastTurnEntries.length) {
-            // Create a new state for this combat step
-            const currentState = Object.assign(new GameState(), result);
-            
-            // Update the current entries to show progress
-            setCurrentEntries(prevEntries => [...prevEntries, lastTurnEntries[index]]);
-            
-            // Update state based on effects
-            const entry = lastTurnEntries[index];
-            entry.effect?.forEach(effect => {
-              if (effect.target === 'monster' && effect.type === 'HP' && currentState.monster) {
-                currentState.monster.health += effect.value;
-              }
-              if (effect.target === 'player') {
-                if (effect.type === 'Mana') {
-                  currentState.player.mana += effect.value;
-                }
-                if (effect.type === 'HP') {
-                  currentState.player.health += effect.value;
-                }
-              }
-            });
-            
-            // Update the game state to reflect changes
-            updateGameState.mutate(currentState);
-            index++;
-          } else {
-            clearInterval(intervalId);
-            unpauseTurn();
-            if (result.player.pendingSpell) {
-              setIsSpellChoiceModalOpen(true);
-            }
-          }
-        }, 1000);
+      if (result.monsterEncountered) {
+        const encounterState = Object.assign(new GameState(), result);
+        updateGameState.mutate(encounterState, {
+          onSuccess: (updatedGameState) => handleCombatSequence(updatedGameState),
+        });
       } else {
-        console.log('Initial non-monster event');
         setCurrentEntries([]);
         updateGameState.mutate(result);
-        // Show spell choice modal immediately if there's a pending spell
         if (result.player.pendingSpell) {
           setIsSpellChoiceModalOpen(true);
         }
@@ -132,62 +159,18 @@ export default function Game() {
       return;
     }
 
-    console.log('Creating updated game state');
-    // Create a new instance of GameState to preserve class methods
     const updatedGameState = Object.assign(new GameState(), gameState);
-    console.log('Triggering event');
     const result = EventManager.triggerEvent(updatedGameState);
-    console.log('Event result:', result);
 
-    // Check if there's a monster encounter
-    if (result.monster) {
-      console.log('Monster encounter detected');
-      pauseTurn();
-      setCurrentEntries([result.gameLog[result.gameLog.length - 1][0]]);
-      
-      // Show remaining entries with a short delay
-      const lastTurnEntries = result.gameLog[result.gameLog.length - 1];
-      let index = 1;
-      const intervalId = setInterval(() => {
-        if (index < lastTurnEntries.length) {
-          // Create a new state for this combat step
-          const currentState = Object.assign(new GameState(), result);
-          
-          // Update the current entries to show progress
-          setCurrentEntries(prevEntries => [...prevEntries, lastTurnEntries[index]]);
-          
-          // Update state based on effects
-          const entry = lastTurnEntries[index];
-          entry.effect?.forEach(effect => {
-            if (effect.target === 'monster' && effect.type === 'HP' && currentState.monster) {
-              currentState.monster.health += effect.value;
-            }
-            if (effect.target === 'player') {
-              if (effect.type === 'Mana') {
-                currentState.player.mana += effect.value;
-              }
-              if (effect.type === 'HP') {
-                currentState.player.health += effect.value;
-              }
-            }
-          });
-          
-          // Update the game state to reflect changes
-          updateGameState.mutate(currentState);
-          index++;
-        } else {
-          clearInterval(intervalId);
-          unpauseTurn();
-          if (result.player.pendingSpell) {
-            setIsSpellChoiceModalOpen(true);
-          }
-        }
-      }, 1000);
+    if (result.monsterEncountered) {
+      // Immediately update the state to show the monster encounter section
+      const encounterState = Object.assign(new GameState(), result);
+      updateGameState.mutate(encounterState, {
+        onSuccess: (updatedGameState) => handleCombatSequence(updatedGameState),
+      });
     } else {
-      console.log('Non-monster event');
       setCurrentEntries([]);
       updateGameState.mutate(result);
-      // Show spell choice modal immediately if there's a pending spell
       if (result.player.pendingSpell) {
         setIsSpellChoiceModalOpen(true);
       }
@@ -497,26 +480,31 @@ export default function Game() {
               )}
 
               {/* Combat Encounter Display */}
-              {gameState.monster && (
+              {isTurnPaused && (
                 <div className="mt-4 p-2 rounded-lg w-full">
                   <h2 className="text-lg sm:text-xl font-bold mb-3">Combat Encounter</h2>
                   <ul className="text-white/90 overflow-y-auto max-h-[180px] space-y-2">
-                    {currentEntries?.length && currentEntries[currentEntries.length - 1] && (
-                      <li className={`${
-                        currentEntries[currentEntries.length - 1].message.includes('A wild') ? 'shake' : ''
-                      } ${
-                        currentEntries[currentEntries.length - 1].message.includes('spell') ? 'glow' : ''
-                      }`}>
-                        {renderLogEntry(currentEntries[currentEntries.length - 1], 'bg-pink-900/50')}
+                    {currentEntries?.map((entry, index) => (
+                      <li
+                        key={`combat-entry-${index}`}
+                        className={`${
+                          entry.message.includes('A wild') ? 'shake' : ''
+                        } ${
+                          entry.message.includes('spell') ? 'glow' : ''
+                        }`}
+                      >
+                        {renderLogEntry(entry, 'bg-pink-900/50')}
                       </li>
-                    )}
+                    ))}
                   </ul>
-                  <ProgressBar
-                    label="Monster"
-                    value={gameState.monster.health > 0 ? gameState.monster.health : 0}
-                    max={gameState.monster.maxHealth}
-                    color="bg-purple-400"
-                  />
+                  {gameState.monster && (
+                    <ProgressBar
+                      label="Monster"
+                      value={gameState.monster.health > 0 ? gameState.monster.health : 0}
+                      max={gameState.monster.maxHealth}
+                      color="bg-purple-400"
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -542,35 +530,43 @@ export default function Game() {
               {gameStarted && gameState?.gameLog.length > 0 ? (
                 gameState.gameLog
                   .slice(Math.max(gameState.gameLog.length - 3, 0))
-                  .map((turnEntries: LogEntry[], turnIndex) => {
+                  .map((turnEntries: LogEntry[], turnIndex, array) => {
                     const lastEntry = turnEntries[turnEntries.length - 1];
+                    const turnNumber =
+                      gameState.gameLog.length > 3
+                        ? gameState.gameLog.length - (2 - turnIndex)
+                        : turnIndex + 1;
+
+                    if (isTurnPaused && turnIndex === array.length - 1) {
+                      return (
+                        <li key={`turn-${turnIndex}`} className="mb-3">
+                          <div className="font-bold text-sm sm:text-base">
+                            Turn {turnNumber}
+                          </div>
+                          <div className="text-sm p-3 rounded bg-pink-900/50">
+                            Combat in progress...
+                          </div>
+                        </li>
+                      );
+                    }
+
                     return (
                       <li key={`turn-${turnIndex}`} className="mb-3">
                         <div className="font-bold text-sm sm:text-base">
-                          Turn {gameState.gameLog.length > 3
-                            ? gameState.gameLog.length - (2 - turnIndex)
-                            : turnIndex + 1}
+                          Turn {turnNumber}
                         </div>
-                        {!isTurnPaused ||
-                        (gameState.gameLog.length > 3 ? turnIndex !== 2 : turnIndex !== gameState.gameLog.length - 1) ? (
-                          <ul>
-                            {Array.isArray(turnEntries) && lastEntry?.message ? (
-                              <li className={turnIndex === 2 ? 'highlight' : ''}>
-                                {renderLogEntry(lastEntry, 'bg-pink-900/50', true, turnEntries)}
-                              </li>
-                            ) : null}
-                          </ul>
-                        ) : (
-                          <>
-                            {/* Show initial monster encounter message */}
-                            {turnEntries[0] && turnEntries[0].message.includes('A wild') && (
-                              <div className="mb-2">
-                                {renderLogEntry(turnEntries[0], 'bg-pink-900/50')}
-                              </div>
-                            )}
-                            Combat encounter is live...
-                          </>
-                        )}
+                        <ul>
+                          {Array.isArray(turnEntries) && lastEntry?.message ? (
+                            <li className={turnIndex === 2 ? 'highlight' : ''}>
+                              {renderLogEntry(
+                                lastEntry,
+                                'bg-pink-900/50',
+                                true,
+                                turnEntries
+                              )}
+                            </li>
+                          ) : null}
+                        </ul>
                       </li>
                     );
                   })
@@ -810,11 +806,9 @@ export default function Game() {
             <div className="space-y-2 mb-6">
               <p className="font-bold">Changes in this version:</p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Added detailed item tooltips - click the Donut Crown to see what it does! <span className="emoji-float emoji-level-up">👑</span></li>
-                <li>Fixed combat animations to show each action step-by-step</li>
-                <li>Improved monster state handling between encounters</li>
-                <li>Added proper spell learning UI for non-combat events</li>
-                <li>Fixed various UI glitches and state bugs</li>
+                <li>Combat animations are now displayed step-by-step.</li>
+                <li>The monster&apos;s health bar now updates in real-time during combat.</li>
+                <li>The main game log shows &quot;Combat in progress...&quot; during encounters.</li>
               </ul>
             </div>
             <button

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export const CURRENT_VERSION = "v0.2.3";
+export const CURRENT_VERSION = "v0.2.4";
 
 interface VersionContextType {
   version: string;
@@ -14,7 +14,7 @@ interface VersionContextType {
 const VersionContext = createContext<VersionContextType | undefined>(undefined);
 
 export const VersionProvider = ({ children }: { children: React.ReactNode }) => {
-  const [version, setVersion] = useState('v1.2.0');
+  const [version, setVersion] = useState(CURRENT_VERSION);
   const [showVersionModal, setShowVersionModal] = useState(false);
 
   useEffect(() => {

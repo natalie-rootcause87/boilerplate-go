@@ -92,8 +92,16 @@ export default class EventManager {
     const difficultyLevel = Math.floor(gameState.gameLog.length / 10) + 1; // Increase difficulty over time
     const monster = isBossFight ? getRandomBossMonster() : getRandomMonster(gameState.gameLog.length, difficultyLevel);
     gameState.monster = monster;
+    gameState.monsterEncountered = true;
     gameState.addLogEntry(`A wild ${monster.name} appears!`);
+
+    // The combat method simulates the fight and will set monster to null if defeated.
+    // We want to keep the monster data for the animation, so we'll restore it after.
+    const monsterDataForAnimation = JSON.parse(JSON.stringify(monster));
+
     gameState.combat(monster);
+    
+    gameState.monster = monsterDataForAnimation;
   }
 
   static spellSelection(gameState: GameState, spellOverride?: string) {

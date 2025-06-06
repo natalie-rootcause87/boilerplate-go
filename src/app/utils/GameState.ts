@@ -28,6 +28,7 @@ export interface PartialGameState {
 export default class GameState {
   player: Player;
   monster: Monster | null;
+  monsterEncountered: boolean;
   gameLog: LogEntry[][];
   isGameOver: boolean;
   unlockedSpells: string[];
@@ -36,6 +37,7 @@ export default class GameState {
   constructor() {
     this.player = new Player();
     this.monster = null;
+    this.monsterEncountered = false;
     this.gameLog = this.loadGameLog();
     this.isGameOver = false;
     this.unlockedSpells = this.loadUnlockedSpells();
